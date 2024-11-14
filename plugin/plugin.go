@@ -18,11 +18,11 @@ func Check() error {
 	return nil
 }
 
-func Uninstall() {
-
+func Uninstall() error {
+	return nil
 }
 
-func Execute(op options.PluginOption) (interface{}, error) {
+func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	fmt.Printf("%v", op)
 	var result chan string
 	go utils.Tools.ExecuteCommandToChan("whoami", []string{}, result)

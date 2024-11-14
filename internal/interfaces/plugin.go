@@ -25,6 +25,7 @@ type Plugin interface {
 	GetTaskName() string
 	Execute(input interface{}) (interface{}, error)
 	Install() error
+	UnInstall() error
 	Check() error
 	Clone() Plugin
 	Log(msg string, tp ...string)

@@ -86,9 +86,6 @@ func (c *Client) GetCollection(collectionName string) *mongo.Collection {
 
 // FindAll 查询多个文档
 func (c *Client) FindAll(collectionName string, query, selector, result interface{}) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	collection := c.GetCollection(collectionName)
 	cur, err := collection.Find(context.Background(), query, options.Find().SetProjection(selector))
 	if err != nil {
@@ -100,9 +97,6 @@ func (c *Client) FindAll(collectionName string, query, selector, result interfac
 }
 
 func (c *Client) Aggregate(collectionName string, pipeline, result interface{}) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	collection := c.GetCollection(collectionName)
 	cur, err := collection.Aggregate(context.Background(), pipeline)
 	if err != nil {
@@ -114,17 +108,11 @@ func (c *Client) Aggregate(collectionName string, pipeline, result interface{}) 
 }
 
 func (c *Client) FindOne(collectionName string, query, selector, result interface{}) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	collection := c.GetCollection(collectionName)
 	return collection.FindOne(context.Background(), query, options.FindOne().SetProjection(selector)).Decode(result)
 }
 
 func (c *Client) FindFile(filename string) ([]byte, error) {
-	if !global.DatabaseEnabled {
-		return []byte{}, nil
-	}
 	// 使用 GridFS bucket
 	bucket, err := gridfs.NewBucket(c.database)
 	if err != nil {
@@ -147,18 +135,12 @@ func (c *Client) FindFile(filename string) ([]byte, error) {
 
 // Update 更新单个文档
 func (c *Client) Update(collectionName string, selector, update interface{}) (*mongo.UpdateResult, error) {
-	if !global.DatabaseEnabled {
-		return &mongo.UpdateResult{}, nil
-	}
 	collection := c.GetCollection(collectionName)
 	return collection.UpdateOne(context.Background(), selector, update)
 }
 
 // Upsert 更新或插入文档
 func (c *Client) Upsert(collectionName string, selector, update interface{}) (*mongo.UpdateResult, error) {
-	if !global.DatabaseEnabled {
-		return &mongo.UpdateResult{}, nil
-	}
 	collection := c.GetCollection(collectionName)
 	opts := options.Update().SetUpsert(true)
 	return collection.UpdateOne(context.Background(), selector, update, opts)
@@ -166,25 +148,16 @@ func (c *Client) Upsert(collectionName string, selector, update interface{}) (*m
 
 // UpdateAll 更新多个文档
 func (c *Client) UpdateAll(collectionName string, selector, update interface{}) (*mongo.UpdateResult, error) {
-	if !global.DatabaseEnabled {
-		return &mongo.UpdateResult{}, nil
-	}
 	collection := c.GetCollection(collectionName)
 	return collection.UpdateMany(context.Background(), selector, update)
 }
 
 func (c *Client) InsertOne(collectionName string, document interface{}) (*mongo.InsertOneResult, error) {
-	if !global.DatabaseEnabled {
-		return &mongo.InsertOneResult{}, nil
-	}
 	collection := c.GetCollection(collectionName)
 	return collection.InsertOne(context.Background(), document)
 }
 
 func (c *Client) InsertMany(collectionName string, documents []interface{}) (*mongo.InsertManyResult, error) {
-	if !global.DatabaseEnabled {
-		return &mongo.InsertManyResult{}, nil
-	}
 	collection := c.GetCollection(collectionName)
 	// 设置 InsertMany 选项，允许非顺序插入
 	opts := options.InsertMany().SetOrdered(false)
@@ -193,9 +166,6 @@ func (c *Client) InsertMany(collectionName string, documents []interface{}) (*mo
 
 // Close 关闭与MongoDB的连接
 func (c *Client) Close() {
-	if !global.DatabaseEnabled {
-		return
-	}
 	if c.client != nil {
 		err := c.client.Disconnect(context.Background())
 		if err != nil {
@@ -207,9 +177,6 @@ func (c *Client) Close() {
 }
 
 func (c *Client) Ping() error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	if c == nil {
 		fmt.Println("MongoDBClient c is nil")
 		return errors.New("mongodb client is not initialized")
@@ -222,9 +189,6 @@ func (c *Client) Ping() error {
 }
 
 func (c *Client) FindFilesByPattern(pattern string) (map[string][]byte, error) {
-	if !global.DatabaseEnabled {
-		return nil, nil
-	}
 	// 使用 GridFS bucket
 	bucket, err := gridfs.NewBucket(c.database)
 	if err != nil {

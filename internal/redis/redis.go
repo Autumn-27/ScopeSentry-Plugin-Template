@@ -74,18 +74,12 @@ func (r *Client) Close() error {
 }
 
 func (r *Client) HMSet(ctx context.Context, key string, fields map[string]interface{}) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	if r == nil {
 		return errors.New("redis client nill")
 	}
 	return r.client.HMSet(ctx, key, fields).Err()
 }
 func (r *Client) HDel(ctx context.Context, key string, fields ...string) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	if r == nil {
 		return errors.New("redis client nil")
 	}
@@ -93,9 +87,6 @@ func (r *Client) HDel(ctx context.Context, key string, fields ...string) error {
 }
 
 func (r *Client) Del(ctx context.Context, key string) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	if r == nil {
 		return errors.New("redis client nil")
 	}
@@ -103,56 +94,32 @@ func (r *Client) Del(ctx context.Context, key string) error {
 }
 
 func (r *Client) Expire(ctx context.Context, key string, expiration time.Duration) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	return r.client.Expire(ctx, key, expiration).Err()
 }
 func (r *Client) HSet(ctx context.Context, key, field string, value interface{}) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	return r.client.HSet(ctx, key, field, value).Err()
 }
 
 func (r *Client) SetWithTimeout(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	return r.client.Set(ctx, key, value, expiration).Err()
 }
 func (r *Client) HGet(ctx context.Context, key, field string) (string, error) {
-	if !global.DatabaseEnabled {
-		return "", nil
-	}
 	return r.client.HGet(ctx, key, field).Result()
 }
 
 func (r *Client) PopFromListR(ctx context.Context, key string) (string, error) {
-	if !global.DatabaseEnabled {
-		return "", nil
-	}
 	return r.client.RPop(ctx, key).Result()
 }
 
 func (r *Client) GetFirstFromList(ctx context.Context, key string) (string, error) {
-	if !global.DatabaseEnabled {
-		return "", nil
-	}
 	return r.client.LIndex(ctx, key, 0).Result()
 }
 
 func (r *Client) PopFirstFromList(ctx context.Context, key string) (string, error) {
-	if !global.DatabaseEnabled {
-		return "", nil
-	}
 	return r.client.LPop(ctx, key).Result()
 }
 
 func (r *Client) Exists(ctx context.Context, key string) (bool, error) {
-	if !global.DatabaseEnabled {
-		return false, nil
-	}
 	exists, err := r.client.Exists(ctx, key).Result()
 	if err != nil {
 		return false, err
@@ -161,17 +128,11 @@ func (r *Client) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 func (r *Client) SAdd(ctx context.Context, key string, members ...interface{}) (int64, error) {
-	if !global.DatabaseEnabled {
-		return 0, nil
-	}
 	return r.client.SAdd(ctx, key, members...).Result()
 }
 
 // LLen 获取列表的长度
 func (r *Client) LLen(ctx context.Context, key string) (int64, error) {
-	if !global.DatabaseEnabled {
-		return 0, nil
-	}
 	if r.client == nil {
 		return 0, errors.New("redis client nil")
 	}
@@ -180,9 +141,6 @@ func (r *Client) LLen(ctx context.Context, key string) (int64, error) {
 
 // LRange 获取列表中指定范围的元素
 func (r *Client) LRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
-	if !global.DatabaseEnabled {
-		return []string{}, nil
-	}
 	if r.client == nil {
 		return nil, errors.New("redis client nil")
 	}
@@ -191,9 +149,6 @@ func (r *Client) LRange(ctx context.Context, key string, start, stop int64) ([]s
 
 // LRem 删除列表中指定数量的元素
 func (r *Client) LRem(ctx context.Context, key string, count int64, value string) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	if r.client == nil {
 		return errors.New("redis client nil")
 	}
@@ -202,9 +157,6 @@ func (r *Client) LRem(ctx context.Context, key string, count int64, value string
 
 // BatchGetAndDelete 批量获取并删除列表元素
 func (r *Client) BatchGetAndDelete(ctx context.Context, key string, count int64) ([]string, error) {
-	if !global.DatabaseEnabled {
-		return []string{}, nil
-	}
 	if r.client == nil {
 		return nil, errors.New("redis client nil")
 	}
@@ -230,15 +182,9 @@ func (r *Client) BatchGetAndDelete(ctx context.Context, key string, count int64)
 
 // SIsMember 检查成员是否存在于集合中
 func (r *Client) SIsMember(ctx context.Context, key string, member interface{}) (bool, error) {
-	if !global.DatabaseEnabled {
-		return false, nil
-	}
 	return r.client.SIsMember(ctx, key, member).Result()
 }
 func (r *Client) Subscribe(ctx context.Context, channels ...string) (*redis.PubSub, error) {
-	if !global.DatabaseEnabled {
-		return nil, nil
-	}
 	pubsub := r.client.Subscribe(ctx, channels...)
 	_, err := pubsub.Receive(ctx)
 	if err != nil {
@@ -248,9 +194,6 @@ func (r *Client) Subscribe(ctx context.Context, channels ...string) (*redis.PubS
 }
 
 func (r *Client) Publish(ctx context.Context, channel string, message interface{}) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	result := r.client.Publish(ctx, channel, message)
 	if result.Err() != nil {
 		return fmt.Errorf("failed to publish message: %v", result.Err())
@@ -259,9 +202,6 @@ func (r *Client) Publish(ctx context.Context, channel string, message interface{
 }
 
 func (r *Client) AddToList(ctx context.Context, key string, values ...interface{}) (int64, error) {
-	if !global.DatabaseEnabled {
-		return 0, nil
-	}
 	result, err := r.client.RPush(ctx, key, values...).Result()
 	if err != nil {
 		return 0, fmt.Errorf("failed to add values to list: %v", err)
@@ -270,16 +210,10 @@ func (r *Client) AddToList(ctx context.Context, key string, values ...interface{
 }
 
 func (r *Client) Set(ctx context.Context, key string, value interface{}) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	return r.client.Set(ctx, key, value, 0).Err()
 }
 
 func (r *Client) Ping(ctx context.Context) error {
-	if !global.DatabaseEnabled {
-		return nil
-	}
 	if r == nil {
 		fmt.Println("redis r is nil")
 		return errors.New("Redis client is not initialized")

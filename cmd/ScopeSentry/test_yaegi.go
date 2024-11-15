@@ -47,7 +47,7 @@ func main() {
 	interp.Use(symbols.Symbols)
 
 	// 加载插件
-	pluginPath := filepath.Join("D:\\code\\ScopeSentry\\ScopeSentry-Plugin-Template\\plugin", "plugin.go")
+	pluginPath := filepath.Join("D:\\code\\ScopeSentry\\ScopeSentry-Plugin-Template\\plugin", "plugin")
 	fmt.Printf("Loading plugin from: %s\n", pluginPath) // 打印插件路径以确认
 	_, err = interp.EvalPath(pluginPath)
 	if err != nil {
@@ -86,5 +86,5 @@ func main() {
 	uninstallFunc := v.Interface().(func() error)
 	plg := customplugin.NewPlugin("test", "", installFunc, checkFunc, executeFunc, uninstallFunc, getNameFunc)
 	nePlg := plg.Clone()
-	fmt.Println(nePlg.GetName())
+	fmt.Println(nePlg.Execute("d"))
 }

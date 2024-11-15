@@ -11,22 +11,16 @@
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/options
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/bigcache
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/config
-//go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/configupdater
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/contextmanager
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/global
-//go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/handler
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/interfaces
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/mongodb
-//go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/node
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/notification
-//go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/pebbledb
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/plugins
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/pool
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/redis
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/results
-//go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/runner
 //go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/types
-//go:generate yaegi extract github.com/Autumn-27/ScopeSentry-Scan/internal/task
 package symbols
 
 import "reflect"

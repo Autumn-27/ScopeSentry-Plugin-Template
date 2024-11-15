@@ -24,7 +24,7 @@ func Uninstall() error {
 
 func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	fmt.Printf("%v", op)
-	var result chan string
+	result := make(chan string, 10)
 	go utils.Tools.ExecuteCommandToChan("whoami", []string{}, result)
 	for i := range result {
 		fmt.Println(i)

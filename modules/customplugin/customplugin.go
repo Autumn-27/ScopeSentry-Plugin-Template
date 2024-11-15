@@ -45,7 +45,6 @@ func NewPlugin(module string, plgId string, installFunc func() error, checkFunc 
 func (p *Plugin) SetTaskName(name string) {
 	p.TaskName = name
 }
-
 func (p *Plugin) GetTaskName() string {
 	return p.TaskName
 }

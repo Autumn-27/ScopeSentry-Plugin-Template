@@ -49,14 +49,19 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		// 说明不是http的资产，直接返回
 		return nil, nil
 	}
-	subdomainResult := types.SubdomainResult{
-		Host:  "demo." + data,
-		Type:  "A",
-		Value: []string{"api.example.com", "api.example.net", "api.example.org"},
-		IP:    []string{"192.168.100.10", "192.168.100.11", "192.168.100.12"},
-		Time:  utils.Tools.GetTimeNow(),
-		Tags:  []string{"demo-subdoamin"},
+
+	result := make(chan string)
+	go utils.Tools.ExecuteCommandToChan("whoami", []string{}, result)
+	for i := range result {
+		subdomainResult := types.SubdomainResult{
+			Host:  i + "." + data,
+			Type:  "A",
+			Value: []string{"api.example.com", "api.example.net", "api.example.org"},
+			IP:    []string{"192.168.100.10", "192.168.100.11", "192.168.100.12"},
+			Time:  "",
+			Tags:  []string{"demo-subdoamin"},
+		}
+		op.ResultFunc(subdomainResult)
 	}
-	op.Result <- subdomainResult
 	return nil, nil
 }

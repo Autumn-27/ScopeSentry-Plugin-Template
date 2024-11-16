@@ -14,6 +14,7 @@ func init() {
 		"AppConfig":             reflect.ValueOf(&global.AppConfig).Elem(),
 		"ConfigDir":             reflect.ValueOf(&global.ConfigDir).Elem(),
 		"ConfigPath":            reflect.ValueOf(&global.ConfigPath).Elem(),
+		"DatabaseEnabled":       reflect.ValueOf(&global.DatabaseEnabled).Elem(),
 		"DictPath":              reflect.ValueOf(&global.DictPath).Elem(),
 		"DisallowedURLFilters":  reflect.ValueOf(&global.DisallowedURLFilters).Elem(),
 		"ExtDir":                reflect.ValueOf(&global.ExtDir).Elem(),

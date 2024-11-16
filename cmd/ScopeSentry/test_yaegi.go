@@ -19,16 +19,6 @@ import (
 	"path/filepath"
 )
 
-const src = `package foo
-
-import "github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
-
-func Bar(s string) string {
-	logger.SlogInfoLocal("system config load begin")
-	return s + "-Foo"
-}
-`
-
 func main() {
 	logger.NewLogger()
 	// 获取可执行文件的目录

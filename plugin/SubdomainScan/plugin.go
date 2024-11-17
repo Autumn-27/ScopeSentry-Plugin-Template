@@ -4,6 +4,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
+	"strings"
 )
 
 func GetName() string {
@@ -53,6 +54,8 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	result := make(chan string)
 	go utils.Tools.ExecuteCommandToChan("whoami", []string{}, result)
 	for i := range result {
+		i = strings.Replace(i, "\\", "", 1)
+		i = strings.Replace(i, "/", "", 1)
 		subdomainResult := types.SubdomainResult{
 			Host:  i + "." + data,
 			Type:  "A",

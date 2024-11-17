@@ -1,0 +1,8 @@
+{
+  "help":"无需参数/No parameters",
+  "parameter":"",
+  "name":"SubdomainScanDemo",
+  "module": "SubdomainScan",
+  "version":"v1.0",
+  "introduction":"子域名扫描模块demo/Demo of SubdomainScan module"
+}

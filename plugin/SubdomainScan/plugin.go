@@ -1,10 +1,12 @@
 package plugin
 
 import (
+	"github.com/Autumn-27/ScopeSentry-Scan/internal/contextmanager"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
 	"strings"
+	"time"
 )
 
 func GetName() string {
@@ -52,7 +54,9 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	}
 
 	result := make(chan string)
-	go utils.Tools.ExecuteCommandToChan("whoami", []string{}, result)
+	ctx := contextmanager.GlobalContextManagers.GetContext(op.TaskId)
+	// 设置超时时间和任务上下文管理
+	go utils.Tools.ExecuteCommandToChanWithTimeout("whoami", []string{}, result, 20*time.Minute, ctx)
 	for i := range result {
 		i = strings.Replace(i, "\\", "", 1)
 		i = strings.Replace(i, "/", "", 1)

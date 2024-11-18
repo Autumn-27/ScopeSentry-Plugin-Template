@@ -1,7 +1,6 @@
 package plugin
 
 import (
-	"github.com/Autumn-27/ScopeSentry-Scan/internal/contextmanager"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
@@ -52,11 +51,10 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		// 说明不是http的资产，直接返回
 		return nil, nil
 	}
-
+	op.Log("begin subdomain")
 	result := make(chan string)
-	ctx := contextmanager.GlobalContextManagers.GetContext(op.TaskId)
 	// 设置超时时间和任务上下文管理
-	go utils.Tools.ExecuteCommandToChanWithTimeout("whoami", []string{}, result, 20*time.Minute, ctx)
+	go utils.Tools.ExecuteCommandToChanWithTimeout("whoami", []string{}, result, 20*time.Minute, op.Ctx)
 	for i := range result {
 		i = strings.Replace(i, "\\", "", 1)
 		i = strings.Replace(i, "/", "", 1)

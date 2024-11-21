@@ -1,0 +1,8 @@
+{
+  "help":"-finger 指纹路径 -thread 并发限制",
+  "parameter":"-finger {dict.finger.finger.json} -thread 20",
+  "name":"EHole",
+  "module": "AssetHandle",
+  "version":"v1.0",
+  "introduction":"EHole 指纹识别/EHole Fingerprint recognition"
+}

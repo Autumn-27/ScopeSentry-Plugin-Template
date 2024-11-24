@@ -18,6 +18,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/handler"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/mongodb"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/notification"
+	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/pebbledb"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/plugins"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/pool"
@@ -26,6 +27,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
+	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/AssetHandle/ehole"
 	"log"
 	"path/filepath"
 	"runtime"
@@ -58,10 +60,10 @@ var (
 		CDNName:       "Cloudflare",
 		Port:          "443",
 		URL:           "https://example.com",
-		Title:         "Example Site",
+		Title:         "",
 		Type:          "web",
 		Error:         "",
-		ResponseBody:  "Example response body here.",
+		ResponseBody:  "Example response body style1/css/ListRange.css 主账套 login.jsp",
 		Host:          "example.com",
 		IP:            "192.168.1.1",
 		Screenshot:    "path/to/screenshot.png",
@@ -112,9 +114,52 @@ func main() {
 	}
 	parentDir := filepath.Dir(filePath)
 	plgPath := filepath.Join(parentDir, "..", "..", "plugin")
+	fmt.Println(plgPath)
 
-	TestAssetHandle(plgPath)
-	TestSubdomainScan(plgPath)
+	//TestAssetHandle(plgPath)
+	//TestSubdomainScan(plgPath)
+	TestEHole(plgPath)
+	//TestEHoleDebug()
+}
+
+func TestEHoleDebug() {
+	op := options.PluginOption{
+		Name:      "EHole",
+		Module:    "AssetHandle",
+		Parameter: "-finger dwa -thread 20",
+		PluginId:  "11111",
+		Ctx:       contextmanager.GlobalContextManagers.GetContext("111111"),
+	}
+	plugin.Execute(&AssetHttpData, op)
+}
+
+func TestEHole(plgPath string) {
+	// plugin id
+	plgId := utils.Tools.GenerateRandomString(8)
+	// plugin module name
+	plgModule := "AssetHandle"
+	// plugin path
+	plgPath = filepath.Join(plgPath, "AssetHandle", "ehole", "plugin.go")
+
+	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("plugin name: %v\n", plugin.GetName())
+	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+	result := make(chan interface{})
+	plugin.SetParameter("-finger dwa -thread 20")
+	plugin.SetTaskId("1111")
+	plugin.SetTaskName("demo")
+	plugin.SetResult(result)
+	fmt.Printf("AssetHttpData original Technologies: %v\n", AssetHttpData.Technologies)
+	_, err = plugin.Execute(&AssetHttpData)
+	if err != nil {
+		return
+	}
+	fmt.Printf("AssetHttpData Technologies%v\n", AssetHttpData.Technologies)
 }
 
 func TestAssetHandle(plgPath string) {
@@ -123,7 +168,7 @@ func TestAssetHandle(plgPath string) {
 	// plugin module name
 	plgModule := "AssetHandle"
 	// plugin path
-	plgPath = filepath.Join(plgPath, "AssetHandle", "plugin.go")
+	plgPath = filepath.Join(plgPath, "AssetHandle", "demo", "plugin.go")
 
 	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
 	if err != nil {
@@ -152,7 +197,7 @@ func TestSubdomainScan(plgPath string) {
 	// plugin module name
 	plgModule := "SubdomainScan"
 	// plugin path
-	plgPath = filepath.Join(plgPath, "SubdomainScan", "plugin.go")
+	plgPath = filepath.Join(plgPath, "SubdomainScan", "demo", "plugin.go")
 
 	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
 	if err != nil {

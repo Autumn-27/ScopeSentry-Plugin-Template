@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -94,12 +93,11 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		// 说明不是http的资产，直接返回
 		return nil, nil
 	}
-
+	op.Log(fmt.Sprintf("target %v begin", data.URL))
 	parameter := op.Parameter
 	var filgerFile string
-	thread := 20
 	if parameter != "" {
-		args, err := utils.Tools.ParseArgs(parameter, "finger", "thread")
+		args, err := utils.Tools.ParseArgs(parameter, "finger")
 		if err != nil {
 		} else {
 			for key, value := range args {
@@ -107,8 +105,6 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 					switch key {
 					case "finger":
 						filgerFile = value
-					case "thread":
-						thread, _ = strconv.Atoi(value)
 					}
 				}
 			}
@@ -130,71 +126,58 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		op.Log(fmt.Sprintf("json to fingers error: %v", err))
 		return nil, nil
 	}
-	semaphore := make(chan struct{}, thread)
-	var wg sync.WaitGroup
 	// 使用 sync.Map 来保证并发安全
 	uniqueCms := sync.Map{}
-	for _, finp := range fingers.Fingerprint {
+	for _, finger := range fingers.Fingerprint {
 		select {
 		case <-op.Ctx.Done():
 			break
 		default:
-			semaphore <- struct{}{} // 占用一个槽，限制并发数量
-			wg.Add(1)
-			go func(finger Fingerprint) {
-				defer func() {
-					<-semaphore // 释放一个槽，允许新的goroutine开始
-					wg.Done()
-				}()
-				if finger.Location == "body" {
-					if finger.Method == "keyword" {
-						if iskeyword(data.ResponseBody, finger.Keyword) {
-							// 使用 sync.Map 进行并发安全操作
-							uniqueCms.Store(finger.Cms, true)
-						}
-					}
-					if finger.Method == "faviconhash" {
-						if data.FavIconMMH3 == finger.Keyword[0] {
-							uniqueCms.Store(finger.Cms, true)
-						}
-					}
-					if finger.Method == "regular" {
-						if isregular(data.ResponseBody, finger.Keyword) {
-							uniqueCms.Store(finger.Cms, true)
-						}
+			if finger.Location == "body" {
+				if finger.Method == "keyword" {
+					if iskeyword(data.ResponseBody, finger.Keyword) {
+						// 使用 sync.Map 进行并发安全操作
+						uniqueCms.Store(finger.Cms, true)
 					}
 				}
+				if finger.Method == "faviconhash" {
+					if data.FavIconMMH3 == finger.Keyword[0] {
+						uniqueCms.Store(finger.Cms, true)
+					}
+				}
+				if finger.Method == "regular" {
+					if isregular(data.ResponseBody, finger.Keyword) {
+						uniqueCms.Store(finger.Cms, true)
+					}
+				}
+			}
 
-				if finger.Location == "header" {
-					if finger.Method == "keyword" {
-						if iskeyword(data.RawHeaders, finger.Keyword) {
-							uniqueCms.Store(finger.Cms, true)
-						}
-					}
-					if finger.Method == "regular" {
-						if isregular(data.RawHeaders, finger.Keyword) {
-							uniqueCms.Store(finger.Cms, true)
-						}
+			if finger.Location == "header" {
+				if finger.Method == "keyword" {
+					if iskeyword(data.RawHeaders, finger.Keyword) {
+						uniqueCms.Store(finger.Cms, true)
 					}
 				}
-				if finger.Location == "title" {
-					if finger.Method == "keyword" {
-						if iskeyword(data.Title, finger.Keyword) {
-							uniqueCms.Store(finger.Cms, true)
-						}
-					}
-					if finger.Method == "regular" {
-						if isregular(data.Title, finger.Keyword) {
-							uniqueCms.Store(finger.Cms, true)
-						}
+				if finger.Method == "regular" {
+					if isregular(data.RawHeaders, finger.Keyword) {
+						uniqueCms.Store(finger.Cms, true)
 					}
 				}
-			}(finp)
+			}
+			if finger.Location == "title" {
+				if finger.Method == "keyword" {
+					if iskeyword(data.Title, finger.Keyword) {
+						uniqueCms.Store(finger.Cms, true)
+					}
+				}
+				if finger.Method == "regular" {
+					if isregular(data.Title, finger.Keyword) {
+						uniqueCms.Store(finger.Cms, true)
+					}
+				}
+			}
 		}
 	}
-
-	wg.Wait() // 等待所有goroutine完成
-
 	// 从 sync.Map 中获取去重后的结果
 	var result []string
 	existingMap := make(map[string]bool) // 用于忽略大小写去重

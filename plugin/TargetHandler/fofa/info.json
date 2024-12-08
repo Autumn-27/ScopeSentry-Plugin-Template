@@ -1,0 +1,8 @@
+{
+  "help":"-size 每个目标的查询数量 APIK在源码中设置",
+  "parameter":"-size 100",
+  "name":"fofa",
+  "module": "TargetHandler",
+  "version":"v1.0",
+  "introduction":"Fofa查询"
+}

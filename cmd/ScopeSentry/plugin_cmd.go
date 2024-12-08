@@ -28,7 +28,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/modules/customplugin"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
-	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/URLSecurity/SSRFScan"
+	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/TargetHandler/fofa"
 	"log"
 	"path/filepath"
 	"runtime"
@@ -126,7 +126,48 @@ func main() {
 	//TestEHole(plgPath)
 	//TestEHoleDebug()
 	//TestSSRFScanDebug()
-	TestSSRFScan(plgPath)
+	//TestSSRFScan(plgPath)
+	TestFofa(plgPath)
+	//TestFofaDebug()
+}
+
+func TestFofaDebug() {
+	plg := customplugin.NewPlugin("TargetHandler", "11111", plugin.Install, plugin.Check, plugin.Execute, plugin.Uninstall, plugin.GetName)
+	plg.SetParameter("")
+	plg.Execute("baidu.com")
+}
+
+func TestFofa(plgPath string) {
+	// plugin id
+	plgId := utils.Tools.GenerateRandomString(8)
+	// plugin module name
+	plgModule := "TargetHandler"
+	// plugin path
+	plgPath = filepath.Join(plgPath, "TargetHandler", "fofa", "plugin.go")
+
+	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("plugin name: %v\n", plugin.GetName())
+	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+	result := make(chan interface{})
+	plugin.SetParameter("")
+	plugin.SetTaskId("1111")
+	plugin.SetTaskName("demo")
+	plugin.SetResult(result)
+
+	go func() {
+		_, err = plugin.Execute("baidu.com")
+		if err != nil {
+			return
+		}
+	}()
+	for data := range result {
+		fmt.Println(data) // 打印接收到的数据
+	}
 }
 
 func TestSSRFScanDebug() {

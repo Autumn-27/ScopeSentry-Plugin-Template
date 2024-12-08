@@ -3,3 +3,4 @@ ksubdomain.yaml
 dist/
 output/
 data/
+plugin/URLSecurity

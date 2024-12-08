@@ -25,9 +25,10 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/redis"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/results"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
+	"github.com/Autumn-27/ScopeSentry-Scan/modules/customplugin"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
-	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/AssetHandle/ehole"
+	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/URLSecurity/SSRFScan"
 	"log"
 	"path/filepath"
 	"runtime"
@@ -102,6 +103,10 @@ var (
 		TaskName:     []string{"Task A", "Task B"},
 		RootDomain:   "other-example.com",
 	}
+	UrlRes = types.UrlResult{
+		Output:   "http://39.105.160.88:666/djwaklg.php",
+		ResultId: "resultId",
+	}
 )
 
 func main() {
@@ -118,8 +123,43 @@ func main() {
 
 	//TestAssetHandle(plgPath)
 	//TestSubdomainScan(plgPath)
-	TestEHole(plgPath)
+	//TestEHole(plgPath)
 	//TestEHoleDebug()
+	//TestSSRFScanDebug()
+	TestSSRFScan(plgPath)
+}
+
+func TestSSRFScanDebug() {
+	plg := customplugin.NewPlugin("AssetHandle", "11111", plugin.Install, plugin.Check, plugin.Execute, plugin.Uninstall, plugin.GetName)
+	plg.SetParameter("-parfile 674c411aaa621e265dc1815a -dnslog fde390d9.log.dnslog.sbs")
+	plg.Execute(UrlRes)
+}
+
+func TestSSRFScan(plgPath string) {
+	// plugin id
+	plgId := utils.Tools.GenerateRandomString(8)
+	// plugin module name
+	plgModule := "URLSecurity"
+	// plugin path
+	plgPath = filepath.Join(plgPath, "URLSecurity", "SSRFScan", "plugin.go")
+
+	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("plugin name: %v\n", plugin.GetName())
+	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+	result := make(chan interface{})
+	plugin.SetParameter("-parfile 674c411aaa621e265dc1815a -dnslog fde390d9.log.dnslog.sbs")
+	plugin.SetTaskId("1111")
+	plugin.SetTaskName("demo")
+	plugin.SetResult(result)
+	_, err = plugin.Execute(UrlRes)
+	if err != nil {
+		return
+	}
 }
 
 func TestEHoleDebug() {

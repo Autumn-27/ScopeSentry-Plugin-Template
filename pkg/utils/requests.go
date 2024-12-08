@@ -8,6 +8,7 @@
 package utils
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"github.com/projectdiscovery/gologger"
 	"github.com/projectdiscovery/gologger/levels"
 	"github.com/projectdiscovery/httpx/runner"
+	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 	"github.com/valyala/fasthttp"
 	"net"
 	"syscall"
@@ -28,8 +30,10 @@ type request struct {
 var Requests *request
 
 var HttpClient *fasthttp.Client
+var Wappalyzer *wappalyzer.Wappalyze
 
 func InitializeRequests() {
+	gologger.DefaultLogger.SetMaxLevel(levels.LevelWarning) // increase the verbosity (optional)
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
 	}
@@ -48,6 +52,11 @@ func InitializeRequests() {
 		}).Dial,
 	}
 	Requests = &request{}
+	paralyze, err := wappalyzer.New()
+	if err != nil {
+		fmt.Printf("init wappalyzer error: %v", err)
+	}
+	Wappalyzer = paralyze
 }
 
 func (r *request) HttpGet(uri string) (types.HttpResponse, error) {
@@ -65,7 +74,15 @@ func (r *request) HttpGet(uri string) (types.HttpResponse, error) {
 	}
 	tmp := types.HttpResponse{}
 	tmp.Url = uri
-	tmp.Body = string(resp.Body())
+	// 定义最大响应体大小 (100KB)
+	const maxBodySize = 100 * 1024
+
+	// 截断 Body
+	body := resp.Body()
+	if len(body) > maxBodySize {
+		body = body[:maxBodySize]
+	}
+	tmp.Body = string(body)
 	tmp.StatusCode = resp.StatusCode()
 	if location := resp.Header.Peek("location"); len(location) > 0 {
 		tmp.Redirect = string(location)
@@ -99,7 +116,47 @@ func (r *request) HttpGetByte(uri string) ([]byte, error) {
 	return tmp, nil
 }
 
-func (r *request) HttpPost(uri string, requestBody []byte, ct string) error {
+func (r *request) HttpPost(uri string, requestBody []byte, ct string) (error, *fasthttp.Response) {
+	req, resp := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
+	defer func() {
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+	}()
+	req.Header.SetMethod(fasthttp.MethodPost)
+	req.SetRequestURI(uri)
+	if ct == "json" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	req.SetBody(requestBody)
+
+	if err := HttpClient.Do(req, resp); err != nil {
+		return err, nil
+	}
+	return nil, resp
+}
+
+func (r *request) HttpGetNoRes(uri string) error {
+	req, resp := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
+	defer func() {
+		fasthttp.ReleaseRequest(req)
+		fasthttp.ReleaseResponse(resp)
+	}()
+
+	// 设置请求 URI
+	req.SetRequestURI(uri)
+
+	req.Header.SetMethod(fasthttp.MethodGet)
+
+	// 发送请求
+	if err := HttpClient.Do(req, resp); err != nil {
+		return err
+	}
+	// 直接丢弃响应体（或者关闭它）
+	resp.Reset()
+	return nil
+}
+
+func (r *request) HttpPostNoRes(uri string, requestBody []byte, ct string) error {
 	req, resp := fasthttp.AcquireRequest(), fasthttp.AcquireResponse()
 	defer func() {
 		fasthttp.ReleaseRequest(req)
@@ -115,11 +172,12 @@ func (r *request) HttpPost(uri string, requestBody []byte, ct string) error {
 	if err := HttpClient.Do(req, resp); err != nil {
 		return err
 	}
+	resp.Reset()
 	return nil
 }
 
 var dialer = &net.Dialer{
-	Timeout: 2 * time.Second,
+	Timeout: 3 * time.Second,
 }
 
 func (r *request) TcpRecv(ip string, port uint16) ([]byte, error) {
@@ -145,16 +203,21 @@ func (r *request) TcpRecv(ip string, port uint16) ([]byte, error) {
 	return response[:length], nil
 }
 
-func (r *request) Httpx(Host string, resultCallback func(r types.AssetHttp), cdncheck string, screenshot bool) {
-	gologger.DefaultLogger.SetMaxLevel(levels.LevelFatal) // increase the verbosity (optional)
+func (r *request) Httpx(targets []string, resultCallback func(r types.AssetHttp), cdncheck string, screenshot bool, screenshotTimeout int, tLSProbe bool, followRedirects bool) {
+	// 设置超时上下文
+	timeout := 30 * time.Minute // 设置超时时间
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
 
 	options := runner.Options{
+		FollowRedirects:           followRedirects,
+		RandomAgent:               true,
 		Methods:                   "GET",
-		JSONOutput:                true,
-		TLSProbe:                  true,
+		JSONOutput:                false,
+		TLSProbe:                  tLSProbe,
 		Threads:                   30,
 		RateLimit:                 100,
-		InputTargetHost:           []string{Host},
+		InputTargetHost:           targets,
 		Favicon:                   true,
 		ExtractTitle:              true,
 		TechDetect:                true,
@@ -168,21 +231,32 @@ func (r *request) Httpx(Host string, resultCallback func(r types.AssetHttp), cdn
 		Jarm:                      true,
 		OutputCDN:                 cdncheck,
 		Location:                  false,
-		HostMaxErrors:             -1,
+		HostMaxErrors:             30,
 		StoreResponse:             false,
 		StoreChain:                false,
 		MaxResponseBodySizeToRead: 100000,
 		Screenshot:                screenshot,
-		ScreenshotTimeout:         5,
+		ScreenshotTimeout:         time.Duration(screenshotTimeout) * time.Second,
+		Timeout:                   10,
+		Wappalyzer:                Wappalyzer,
+		DisableStdout:             true,
 		//InputFile: "./targetDomains.txt", // path to file containing the target domains list
 		OnResult: func(r runner.Result) {
-			// handle error
-			if r.Err != nil {
-				logger.SlogDebugLocal(fmt.Sprintf("HttpxScan error %s: %s", r.Input, r.Err))
-			} else {
-				ah := Tools.HttpxResultToAssetHttp(r)
-				//fmt.Printf("%s %s %d\n", r.Input, r.Host, r.StatusCode)
-				resultCallback(ah)
+			// 检查上下文是否已关闭
+			select {
+			case <-ctx.Done():
+				// 如果上下文关闭，直接返回
+				logger.SlogWarnLocal(fmt.Sprintf("Context closed before processing result for %s", r.Input))
+				return
+			default:
+				// 继续处理结果
+				if r.Err != nil {
+					logger.SlogDebugLocal(fmt.Sprintf("HttpxScan error %s: %s", r.Input, r.Err))
+				} else {
+					ah := Tools.HttpxResultToAssetHttp(r)
+					//fmt.Printf("%s %s %d\n", r.Input, r.Host, r.StatusCode)
+					resultCallback(ah)
+				}
 			}
 		},
 	}
@@ -192,9 +266,24 @@ func (r *request) Httpx(Host string, resultCallback func(r types.AssetHttp), cdn
 
 	httpxRunner, err := runner.New(&options)
 	if err != nil {
-		logger.SlogErrorLocal(fmt.Sprintf("%v get error: %v", Host, err))
+		logger.SlogErrorLocal(fmt.Sprintf("%v get error: %v", targets, err))
 	}
 	defer httpxRunner.Close()
 
-	httpxRunner.RunEnumeration()
+	// 创建一个通道，用于通知任务完成
+	done := make(chan struct{})
+
+	// 启动一个 goroutine 执行 httpxRunner，并在执行完后通知主程序
+	go func() {
+		httpxRunner.RunEnumeration() // 执行 httpx 扫描
+		close(done)                  // 扫描完成后关闭通道，通知主程序
+	}()
+
+	select {
+	case <-ctx.Done(): // 超时后返回
+		logger.SlogWarnLocal(fmt.Sprintf("HttpxScan for %s timed out after %v", targets, timeout))
+		return
+	case <-done: // 扫描完成后继续执行
+		logger.SlogDebugLocal(fmt.Sprintf("HttpxScan for %s completed successfully", targets))
+	}
 }

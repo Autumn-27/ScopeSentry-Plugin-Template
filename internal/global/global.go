@@ -10,6 +10,7 @@ package global
 import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"regexp"
+	"sync"
 )
 
 var (
@@ -32,6 +33,10 @@ var (
 	PocDir                string
 	PluginDir             string
 	DatabaseEnabled       bool
+	CustomParameter       interface{}
+	CustomMapParameter    sync.Map
+	TmpCustomParameter    interface{}
+	TmpCustomMapParameter sync.Map
 	SubdomainTakerFingers []types.SubdomainTakerFinger
 	ScanModule            = []string{
 		"TargetHandler",

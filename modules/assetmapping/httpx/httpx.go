@@ -14,6 +14,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
+	"strconv"
 )
 
 type Plugin struct {
@@ -114,48 +115,72 @@ func (p *Plugin) Log(msg string, tp ...string) {
 }
 
 func (p *Plugin) Execute(input interface{}) (interface{}, error) {
-	asset, ok := input.(types.AssetOther)
+	data, ok := input.([]interface{})
 	if !ok {
-		logger.SlogError(fmt.Sprintf("%v error: %v input is not types.AssetOther\n", p.Name, input))
+		//logger.SlogError(fmt.Sprintf("%v error: %v input is not types.AssetOther\n", p.Name, input))
 		return nil, errors.New("input is not types.AssetOther")
 	}
-	if asset.Type != "http" {
-		p.Result <- asset
-	} else {
-		parameter := p.GetParameter()
-		cdncheck := "false"
-		screenshot := false
-		if parameter != "" {
-			args, err := utils.Tools.ParseArgs(parameter, "cdncheck", "screenshot")
-			if err != nil {
+	var targetList []string
+	for _, assetinterface := range data {
+		asset, ok := assetinterface.(types.AssetOther)
+		if !ok {
+			//p.Log(fmt.Sprintf("assetinterface not types.AssetOther: %v", assetinterface), "w")
+			continue
+		}
+		if asset.Type != "http" {
+			p.Result <- asset
+		} else {
+			var url string
+			if asset.Port != "" {
+				url = asset.Host + ":" + asset.Port + asset.UrlPath
 			} else {
-				for key, value := range args {
-					if value != "" {
-						switch key {
-						case "cdncheck":
-							cdncheck = value
-						case "screenshot":
-							if value == "true" {
-								screenshot = true
-							}
-						default:
-							continue
+				url = asset.Host + asset.UrlPath
+			}
+			targetList = append(targetList, url)
+		}
+	}
+	parameter := p.GetParameter()
+	cdncheck := "false"
+	screenshot := false
+	tlsprobe := true
+	FollowRedirects := true
+	screenshotTimeout := 10
+	if parameter != "" {
+		args, err := utils.Tools.ParseArgs(parameter, "cdncheck", "screenshot", "st", "tlsprobe", "fr")
+		if err != nil {
+		} else {
+			for key, value := range args {
+				if value != "" {
+					switch key {
+					case "cdncheck":
+						cdncheck = value
+					case "screenshot":
+						if value == "true" {
+							screenshot = true
 						}
+					case "tlsprobe":
+						if value == "false" {
+							tlsprobe = false
+						}
+					case "st":
+						screenshotTimeout, _ = strconv.Atoi(value)
+					case "fr":
+						if value == "false" {
+							FollowRedirects = false
+						}
+
+					default:
+						continue
 					}
 				}
 			}
 		}
-		httpxResultsHandler := func(r types.AssetHttp) {
-			p.Result <- r
-		}
-		var url string
-		if asset.Port != "" {
-			url = asset.Host + ":" + asset.Port
-		} else {
-			url = asset.Host
-		}
-		utils.Requests.Httpx(url, httpxResultsHandler, cdncheck, screenshot)
 	}
+	httpxResultsHandler := func(r types.AssetHttp) {
+		p.Result <- r
+	}
+
+	utils.Requests.Httpx(targetList, httpxResultsHandler, cdncheck, screenshot, screenshotTimeout, tlsprobe, FollowRedirects)
 	return nil, nil
 }
 

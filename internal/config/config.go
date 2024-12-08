@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sync"
 )
 
 // LoadConfig 读取配置文件并解析
@@ -115,6 +116,8 @@ func InitFilterUrlRe() {
 }
 
 func Initialize() {
+	global.VERSION = "1.5.2"
+	fmt.Printf("version %v\n", global.VERSION)
 	global.AbsolutePath, _ = filepath.Abs(filepath.Dir(os.Args[0]))
 	global.ConfigDir = filepath.Join(global.AbsolutePath, "config")
 	global.ConfigPath = filepath.Join(global.ConfigDir, "config.yaml")
@@ -122,7 +125,7 @@ func Initialize() {
 	global.DictPath = filepath.Join(global.AbsolutePath, "dictionaries")
 	global.ExtDir = filepath.Join(global.AbsolutePath, "ext")
 	global.PocDir = filepath.Join(global.AbsolutePath, "poc")
-	global.PluginDir = filepath.Join(global.AbsolutePath, "poc")
+	global.PluginDir = filepath.Join(global.AbsolutePath, "plugin")
 	CreateDir()
 	err := LoadConfig()
 	if err != nil {
@@ -135,4 +138,6 @@ func Initialize() {
 		log.Fatalf("子域名接管规则初始化失败: %v", err)
 	}
 	InitFilterUrlRe()
+	global.CustomMapParameter = sync.Map{}
+	global.TmpCustomMapParameter = sync.Map{}
 }

@@ -8,6 +8,7 @@
 package utils
 
 import (
+	"archive/zip"
 	"bufio"
 	"context"
 	"crypto/md5"
@@ -160,6 +161,10 @@ func (t *UtilTools) WriteContentFile(filPath string, fileContent string) error {
 // WriteByteContentFile 将byte写入指定文件
 func (t *UtilTools) WriteByteContentFile(filPath string, fileContent []byte) error {
 	// 将字符串写入文件
+	err := t.EnsureFilePathExists(filPath)
+	if err != nil {
+		return err
+	}
 	if err := ioutil.WriteFile(filPath, fileContent, 0666); err != nil {
 		logger.SlogErrorLocal(fmt.Sprintf("Failed to create filPath: %s - %s", filPath, err))
 		return err
@@ -300,6 +305,9 @@ func (t *UtilTools) GetRootDomain(input string) (string, error) {
 		if len(hostParts) < 2 {
 			return "", fmt.Errorf("域名格式不正确")
 		}
+		if len(hostParts) == 2 {
+			return u.Hostname(), nil
+		}
 		// 检查是否为复合域名
 		if _, ok := compoundDomains[hostParts[len(hostParts)-2]+"."+hostParts[len(hostParts)-1]]; ok {
 			return hostParts[len(hostParts)-3] + "." + hostParts[len(hostParts)-2] + "." + hostParts[len(hostParts)-1], nil
@@ -402,6 +410,7 @@ func (t *UtilTools) HttpGetDownloadFile(url, filePath string) (bool, error) {
 }
 
 func (t *UtilTools) ExecuteCommandWithTimeout(command string, args []string, timeout time.Duration, externalCtx context.Context) error {
+	logger.SlogDebugLocal(fmt.Sprintf("ExecuteCommandWithTimeout cmd: %v args %v", command, args))
 	// 创建一个带有超时的上下文
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel() // 确保在函数结束后取消上下文，防止资源泄漏
@@ -819,7 +828,7 @@ func removeDefaultPort(rawURL string) string {
 }
 
 func (t *UtilTools) HttpxResultToAssetHttp(r runner.Result) types.AssetHttp {
-	defer Tools.DeleteFile(r.ScreenshotPath)
+	//defer Tools.DeleteFile(r.ScreenshotPath)
 	Screenshot := ""
 	if r.ScreenshotBytes != nil {
 		Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(r.ScreenshotBytes)
@@ -991,4 +1000,83 @@ func (t *UtilTools) CompareContentSimilarity(content1, content2 string) (float64
 	percentage := similarity * 100
 	result := math.Round(float64(percentage*100)) / 100
 	return result, nil
+}
+
+// UnzipSrcToDest 将文件src解压到dest
+func (t *UtilTools) UnzipSrcToDest(src string, dest string) error {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		fpath := filepath.Join(dest, f.Name)
+
+		if f.FileInfo().IsDir() {
+			// Make Folder
+			os.MkdirAll(fpath, os.ModePerm)
+			continue
+		}
+
+		err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm)
+		if err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+
+		// Close the file without defer to close before next iteration of loop
+		outFile.Close()
+		rc.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RemoveStringDuplicates 数组去重
+func (t *UtilTools) RemoveStringDuplicates(arr []string) []string {
+	unique := make(map[string]bool)
+	result := []string{}
+
+	for _, value := range arr {
+		if !unique[value] {
+			unique[value] = true
+			result = append(result, value)
+		}
+	}
+
+	return result
+}
+
+func (t *UtilTools) HandleLinuxTemp() {
+	tempDir := "/tmp"
+
+	// 定义 Linux 下的 find 命令
+	findCmd := fmt.Sprintf(
+		`find %s -type d \( -regex '.*/[0-9]\{9\}' -o -name 'ScopeSentry*' -o -name 'nuclei*' -o -name '.org.chromium.Chromium*' -o -name '*_badger' -o -name 'rod' \) -exec rm -rf {} +`,
+		tempDir,
+	)
+
+	// 执行命令
+	cmd := exec.Command("bash", "-c", findCmd)
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("执行 Linux find 命令时出错: %v\n", err)
+		logger.SlogWarn("清空临时文件出错，请手动清空/tmp目录，防止磁盘占用过大")
+		return
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/global"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
+	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
 	"os"
@@ -58,7 +59,7 @@ func Install() error {
 				return nil
 			}
 		}
-		logger.SlogInfo("Findomain installed successfully")
+		logger.SlogInfo("spray installed successfully")
 	}
 	return nil
 }
@@ -71,25 +72,12 @@ func Uninstall() error {
 	return nil
 }
 
-var (
-	APIKEY = "xxxxxxxx"
-)
-
-type Response struct {
-	Error           bool       `json:"error"`
-	ConsumedFPoint  int        `json:"consumed_fpoint"`
-	RequiredFPoints int        `json:"required_fpoints"`
-	Size            int        `json:"size"`
-	Page            int        `json:"page"`
-	Mode            string     `json:"mode"`
-	Query           string     `json:"query"`
-	Results         [][]string `json:"results"` // results 是一个包含数组的二维数组
-}
-
-// Execute 目标处理
-// 带*的目标 "*.example.com"
-// 不带*的目标
 func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
+	data, ok := input.(types.AssetHttp)
+	if !ok {
+		return nil, nil
+	}
+	op.Log(fmt.Sprintf("scan terget begin: %v", data.URL))
 
 	return nil, nil
 }

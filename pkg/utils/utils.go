@@ -10,6 +10,7 @@ package utils
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/base64"
@@ -22,11 +23,15 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/hbollon/go-edlib"
+	"github.com/nfnt/resize"
 	"github.com/projectdiscovery/cdncheck"
 	"github.com/projectdiscovery/httpx/runner"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
 	"gopkg.in/yaml.v3"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"io/ioutil"
 	"math"
@@ -224,7 +229,6 @@ func (t *UtilTools) ParseArgs(args string, keys ...string) (map[string]string, e
 	originalStderr := os.Stderr
 	_, w, _ := os.Pipe()
 	os.Stderr = w
-
 	// 解析参数
 	err := fs.Parse(argsSlice)
 
@@ -827,11 +831,17 @@ func removeDefaultPort(rawURL string) string {
 	return parsedURL.String()
 }
 
+var SizeThreshold = 500 * 1024 // 500 KB
+
 func (t *UtilTools) HttpxResultToAssetHttp(r runner.Result) types.AssetHttp {
 	//defer Tools.DeleteFile(r.ScreenshotPath)
 	Screenshot := ""
 	if r.ScreenshotBytes != nil {
-		Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(r.ScreenshotBytes)
+		if len(r.ScreenshotBytes) <= SizeThreshold {
+			Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(r.ScreenshotBytes)
+		} else {
+			Screenshot = "data:image/png;base64," + Tools.CompressAndEncodeScreenshot(r.ScreenshotBytes, 0.5)
+		}
 	}
 	var ah = types.AssetHttp{
 		Time:         Tools.GetTimeNow(),
@@ -1067,7 +1077,7 @@ func (t *UtilTools) HandleLinuxTemp() {
 
 	// 定义 Linux 下的 find 命令
 	findCmd := fmt.Sprintf(
-		`find %s -type d \( -regex '.*/[0-9]\{9\}' -o -name 'ScopeSentry*' -o -name 'nuclei*' -o -name '.org.chromium.Chromium*' -o -name '*_badger' -o -name 'rod' \) -exec rm -rf {} +`,
+		`find %s -type d \( -regex '.*/[0-9]\{9\}' -o -name 'nuclei*' -o -name '.org.chromium.Chromium*' -o -name '*_badger' -o -name 'rod' \) -exec rm -rf {} +`,
 		tempDir,
 	)
 
@@ -1079,4 +1089,54 @@ func (t *UtilTools) HandleLinuxTemp() {
 		logger.SlogWarn("清空临时文件出错，请手动清空/tmp目录，防止磁盘占用过大")
 		return
 	}
+}
+
+// CompressAndEncodeScreenshot 压缩图片并返回 Base64 编码的字符串。
+// 它接收原始图片字节流 r.ScreenshotBytes，返回 Base64 编码的图片字符串。
+// 该函数会无损压缩 PNG 图像并缩小为原尺寸的 scaleFactor。 0.5 = 50%
+func (t *UtilTools) CompressAndEncodeScreenshot(screenshotBytes []byte, scaleFactor float64) string {
+	if screenshotBytes == nil {
+		logger.SlogWarn("No screenshot data provided.")
+		return ""
+	}
+
+	// 解码原始图片数据
+	img, imgType, err := image.Decode(bytes.NewReader(screenshotBytes))
+	if err != nil {
+		logger.SlogWarn(fmt.Sprintf("Error decoding image:", err))
+		return base64.StdEncoding.EncodeToString(screenshotBytes)
+	}
+
+	// 计算新的图片尺寸（通过缩放比例）
+	newWidth := uint(float64(img.Bounds().Dx()) * scaleFactor)
+	newHeight := uint(float64(img.Bounds().Dy()) * scaleFactor)
+
+	// 压缩图片（无损或有损方式，调整尺寸）
+	compressedImg := resize.Resize(newWidth, newHeight, img, resize.Lanczos3)
+
+	// 创建字节缓冲区存放压缩后的图片数据
+	var buf bytes.Buffer
+
+	// 根据图片格式进行不同的编码
+	switch imgType {
+	case "jpeg":
+		// JPEG 格式使用有损压缩
+		err = jpeg.Encode(&buf, compressedImg, nil)
+		if err != nil {
+			logger.SlogWarn(fmt.Sprintf("Error encoding JPEG image:", err))
+			return base64.StdEncoding.EncodeToString(buf.Bytes())
+		}
+	case "png":
+		// PNG 格式使用无损压缩
+		err = png.Encode(&buf, compressedImg)
+		if err != nil {
+			logger.SlogWarn(fmt.Sprintf("Error encoding PNG image:", err))
+			return base64.StdEncoding.EncodeToString(buf.Bytes())
+		}
+	default:
+		logger.SlogWarn(fmt.Sprintf("Unsupported image format:", imgType))
+		return base64.StdEncoding.EncodeToString(buf.Bytes())
+	}
+
+	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }

@@ -1,7 +1,6 @@
 ksubdomain.yaml
 .idea
 dist/
-output/
+/output/
+!/*/output/
 data/
-plugin/URLSecurity
-plugin/SubdomainScan/bbot

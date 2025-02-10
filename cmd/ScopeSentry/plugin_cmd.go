@@ -157,8 +157,12 @@ func TestXray(plgPath string) {
 			return
 		}
 	}()
-	for data := range result {
-		fmt.Println(data) // 打印接收到的数据
+	var input string
+
+	fmt.Print("请输入一个值: ")
+	fmt.Scanln(&input) // 获取用户输入
+	if input == "2" {
+		plugin.SetCustom("close task")
 	}
 }
 

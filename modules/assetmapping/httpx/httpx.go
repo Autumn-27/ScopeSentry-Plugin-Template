@@ -187,12 +187,6 @@ func (p *Plugin) Execute(input interface{}) (interface{}, error) {
 	httpxResultsHandler := func(r types.AssetHttp) {
 		p.Result <- r
 	}
-
-<<<<<<< HEAD
-	executionTimeout := 10
-	bypassHeader := false
-=======
->>>>>>> 166404a45d573ee1202c4c05526269963c677b69
 	utils.Requests.Httpx(targetList, httpxResultsHandler, cdncheck, screenshot, screenshotTimeout, tlsprobe, FollowRedirects, contextmanager.GlobalContextManagers.GetContext(p.GetTaskId()), executionTimeout, bypassHeader)
 	return nil, nil
 }

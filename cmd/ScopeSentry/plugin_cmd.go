@@ -366,7 +366,13 @@ func Init() {
 	if global.DatabaseEnabled {
 		configupdater.Initialize()
 	}
-	// 初始化模块配置
+	moduleConfig := config.ModulesConfigStruct{
+		MaxGoroutineCount: 10,
+	}
+	utils.Tools.EnsureFilePathExists(config.ModulesConfigPath)
+	// 写入模块配置
+	err = utils.Tools.WriteYAMLFile(config.ModulesConfigPath, moduleConfig)
+	//// 初始化模块配置
 	err = config.ModulesInitialize()
 	if err != nil {
 		log.Fatalf("Failed to init ModulesConfig: %v", err)

@@ -145,9 +145,11 @@ func (p *Plugin) Execute(input interface{}) (interface{}, error) {
 	screenshot := false
 	tlsprobe := true
 	FollowRedirects := true
+	bypassHeader := false
 	screenshotTimeout := 10
+	executionTimeout := 10
 	if parameter != "" {
-		args, err := utils.Tools.ParseArgs(parameter, "cdncheck", "screenshot", "st", "tlsprobe", "fr")
+		args, err := utils.Tools.ParseArgs(parameter, "cdncheck", "screenshot", "st", "tlsprobe", "fr", "et", "bh")
 		if err != nil {
 		} else {
 			for key, value := range args {
@@ -169,7 +171,12 @@ func (p *Plugin) Execute(input interface{}) (interface{}, error) {
 						if value == "false" {
 							FollowRedirects = false
 						}
-
+					case "et":
+						executionTimeout, _ = strconv.Atoi(value)
+					case "bh":
+						if value == "true" {
+							bypassHeader = true
+						}
 					default:
 						continue
 					}
@@ -181,8 +188,11 @@ func (p *Plugin) Execute(input interface{}) (interface{}, error) {
 		p.Result <- r
 	}
 
+<<<<<<< HEAD
 	executionTimeout := 10
 	bypassHeader := false
+=======
+>>>>>>> 166404a45d573ee1202c4c05526269963c677b69
 	utils.Requests.Httpx(targetList, httpxResultsHandler, cdncheck, screenshot, screenshotTimeout, tlsprobe, FollowRedirects, contextmanager.GlobalContextManagers.GetContext(p.GetTaskId()), executionTimeout, bypassHeader)
 	return nil, nil
 }

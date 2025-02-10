@@ -52,6 +52,9 @@ func (r *Runner) ModuleRun() error {
 		defer resultWg.Done()
 		for {
 			select {
+			case <-contextmanager.GlobalContextManagers.GetContext(r.Option.ID).Done():
+				r.NextModule.CloseInput()
+				return
 			case result, ok := <-resultChan:
 				if !ok {
 					// 如果 resultChan 关闭了，退出循环
@@ -67,11 +70,11 @@ func (r *Runner) ModuleRun() error {
 						}
 						var url string
 						if assetResult.Port != "" {
-							url = assetResult.Host + ":" + assetResult.Port
+							url = assetResult.Host + ":" + assetResult.Port + assetResult.UrlPath
 						} else {
-							url = assetResult.Host
+							url = assetResult.Host + assetResult.UrlPath
 						}
-						utils.Requests.Httpx(url, httpxResultsHandler, "false", true)
+						utils.Requests.Httpx([]string{url}, httpxResultsHandler, "false", false, 10, false, true, contextmanager.GlobalContextManagers.GetContext(r.Option.ID), 10, false)
 					} else {
 						// 如果是other类型的资产，直接发送到下个模块
 						r.NextModule.GetInput() <- result
@@ -119,18 +122,19 @@ func (r *Runner) ModuleRun() error {
 				}
 				return nil
 			}
-			_, ok = data.(types.AssetOther)
+			assets, ok := data.([]interface{})
 			if !ok {
 				r.NextModule.GetInput() <- data
 				continue
 			}
+			logger.SlogInfoLocal(fmt.Sprintf("target run httpx number %v", len(assets)))
 			if !firstData {
 				start = time.Now()
 				handler.TaskHandle.ProgressStart(r.GetName(), r.Option.Target, r.Option.ID, len(r.Option.AssetMapping))
 				firstData = true
 			}
 			allPluginWg.Add(1)
-			go func(data interface{}) {
+			go func(assets []interface{}) {
 				defer allPluginWg.Done()
 				//发送来的数据 只能是types.Asset
 				if len(r.Option.AssetMapping) != 0 {
@@ -151,14 +155,20 @@ func (r *Runner) ModuleRun() error {
 							plg.SetResult(resultChan)
 							plg.SetTaskId(r.Option.ID)
 							plg.SetTaskName(r.Option.TaskName)
-							pluginFunc := func(data interface{}) func() {
+							// 这里和其他模块不同 传递的是数组
+							pluginFunc := func(assets []interface{}) func() {
 								return func() {
 									defer plgWg.Done()
-									_, err := plg.Execute(data)
-									if err != nil {
+									select {
+									case <-contextmanager.GlobalContextManagers.GetContext(r.Option.ID).Done():
+										return
+									default:
+										_, err := plg.Execute(assets)
+										if err != nil {
+										}
 									}
 								}
-							}(data)
+							}(assets)
 							err := pool.PoolManage.SubmitTask(r.GetName(), pluginFunc)
 							if err != nil {
 								plgWg.Done()
@@ -172,9 +182,11 @@ func (r *Runner) ModuleRun() error {
 					}
 				} else {
 					// 如果没有开启资产测绘，将types.Asset 发送到结果处，在结果处进行转换
-					resultChan <- data
+					for _, asset := range assets {
+						resultChan <- asset
+					}
 				}
-			}(data)
+			}(assets)
 
 		}
 	}

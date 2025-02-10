@@ -1,8 +1,14 @@
 ksubdomain.yaml
 .idea
 dist/
+<<<<<<< HEAD
 output/
 data/
 plugin/URLSecurity
 plugin/SubdomainScan/bbot
 plugin/PassiveScan/xray
+=======
+/output/
+!/*/output/
+data/
+>>>>>>> 166404a45d573ee1202c4c05526269963c677b69

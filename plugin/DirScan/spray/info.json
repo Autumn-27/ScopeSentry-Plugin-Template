@@ -1,6 +1,6 @@
 {
-  "help":"",
-  "parameter":"",
+  "help":"-et 运行超时时间 -finger 开启指纹识别 -common 启用找到的常见文件 -bak 启用备份文件 -d 目录扫描字典",
+  "parameter":"-et 20 -finger true -common true -bak true -d {dict.dir.default}",
   "name":"spray",
   "module": "DirScan",
   "version":"v1.0",

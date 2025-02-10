@@ -96,6 +96,7 @@ func CreateDir() {
 		global.PocDir,
 		filepath.Join(global.AbsolutePath, "data"),
 		global.PluginDir,
+		global.TmpDir,
 	}
 	for _, scanMopule := range global.ScanModule {
 		dirs = append(dirs, filepath.Join(global.PluginDir, scanMopule))
@@ -116,10 +117,11 @@ func InitFilterUrlRe() {
 }
 
 func Initialize() {
-	global.VERSION = "1.5.2"
+	global.VERSION = "1.5.4"
 	fmt.Printf("version %v\n", global.VERSION)
 	global.AbsolutePath, _ = filepath.Abs(filepath.Dir(os.Args[0]))
 	global.ConfigDir = filepath.Join(global.AbsolutePath, "config")
+	global.TmpDir = filepath.Join(global.AbsolutePath, "tmp")
 	global.ConfigPath = filepath.Join(global.ConfigDir, "config.yaml")
 	ModulesConfigPath = filepath.Join(global.ConfigDir, "modules.yaml")
 	global.DictPath = filepath.Join(global.AbsolutePath, "dictionaries")

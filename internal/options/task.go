@@ -14,7 +14,7 @@ type TaskOptions struct {
 	TaskName            string                       // 任务名称
 	Target              string                       //目标
 	Type                string                       //任务类型
-	TargetParser        []string                     // 目标解析模块
+	TargetHandler       []string                     // 目标解析模块
 	SubdomainScan       []string                     // 子域名扫描模块
 	SubdomainSecurity   []string                     // 子域名安全检测模块
 	AssetMapping        []string                     // 资产测绘模块
@@ -27,6 +27,7 @@ type TaskOptions struct {
 	WebCrawler          []string                     // 爬虫模块
 	DirScan             []string                     //目录扫描模块
 	VulnerabilityScan   []string                     //漏洞扫描模块
+	PassiveScan         []string                     // 被动扫描模块
 	Parameters          map[string]map[string]string // 各个插件的参数
 	IsRestart           bool                         // 是否为重启后从本地获取缓存中获取的目标
 	Duplicates          string                       // 是否忽略已经存储在mongodb中的子域名

@@ -5,3 +5,4 @@ output/
 data/
 plugin/URLSecurity
 plugin/SubdomainScan/bbot
+plugin/PassiveScan/xray

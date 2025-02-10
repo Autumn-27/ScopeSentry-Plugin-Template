@@ -61,7 +61,6 @@ func LoadCustomPlugin(path string, modlue string, plgId string) (interfaces.Plug
 	logger.SlogInfoLocal(fmt.Sprintf("Load custom plugin: %v", path))
 	// 初始化 yaegi 解释器
 	interp := interp.New(interp.Options{})
-
 	// 加载标准库和符号
 	err := interp.Use(stdlib.Symbols)
 	if err != nil {
@@ -105,6 +104,15 @@ func LoadCustomPlugin(path string, modlue string, plgId string) (interfaces.Plug
 		return nil, err
 	}
 	uninstallFunc := v.Interface().(func() error)
-	plg := customplugin.NewPlugin(modlue, plgId, installFunc, checkFunc, executeFunc, uninstallFunc, getNameFunc)
+
+	v, err = interp.Eval("plugin.SetCustom")
+	setCustomFunc := func(interface{}) {}
+	if err != nil {
+		// 如果方法不存在，则设置 setCustomFunc 为 nil
+	} else {
+		// 如果方法存在，则获取该函数
+		setCustomFunc = v.Interface().(func(interface{}))
+	}
+	plg := customplugin.NewPlugin(modlue, plgId, installFunc, checkFunc, executeFunc, uninstallFunc, getNameFunc, setCustomFunc)
 	return plg, nil
 }

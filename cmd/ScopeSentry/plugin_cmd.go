@@ -18,21 +18,17 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/handler"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/mongodb"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/notification"
-	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/pebbledb"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/plugins"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/pool"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/redis"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/results"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
-	"github.com/Autumn-27/ScopeSentry-Scan/modules/customplugin"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
-	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/TargetHandler/fofa"
 	"log"
 	"path/filepath"
 	"runtime"
-	"time"
 )
 
 // All modules
@@ -127,26 +123,22 @@ func main() {
 	//TestEHoleDebug()
 	//TestSSRFScanDebug()
 	//TestSSRFScan(plgPath)
-	TestFofa(plgPath)
+	//TestFofa(plgPath)
 	//TestFofaDebug()
+	TestXray(plgPath)
 }
 
-func TestFofaDebug() {
-	plg := customplugin.NewPlugin("TargetHandler", "11111", plugin.Install, plugin.Check, plugin.Execute, plugin.Uninstall, plugin.GetName)
-	plg.SetParameter("")
-	plg.Execute("baidu.com")
-}
-
-func TestFofa(plgPath string) {
+func TestXray(plgPath string) {
 	// plugin id
 	plgId := utils.Tools.GenerateRandomString(8)
 	// plugin module name
-	plgModule := "TargetHandler"
+	plgModule := "PassiveScan"
 	// plugin path
-	plgPath = filepath.Join(plgPath, "TargetHandler", "fofa", "plugin.go")
+	plgPath = filepath.Join(plgPath, "PassiveScan", "xray", "plugin.go")
 
 	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
 	if err != nil {
+		fmt.Println(err)
 		return
 	}
 
@@ -158,7 +150,7 @@ func TestFofa(plgPath string) {
 	plugin.SetTaskId("1111")
 	plugin.SetTaskName("demo")
 	plugin.SetResult(result)
-
+	plugin.Install()
 	go func() {
 		_, err = plugin.Execute("baidu.com")
 		if err != nil {
@@ -170,146 +162,187 @@ func TestFofa(plgPath string) {
 	}
 }
 
-func TestSSRFScanDebug() {
-	plg := customplugin.NewPlugin("AssetHandle", "11111", plugin.Install, plugin.Check, plugin.Execute, plugin.Uninstall, plugin.GetName)
-	plg.SetParameter("-parfile 674c411aaa621e265dc1815a -dnslog fde390d9.log.dnslog.sbs")
-	plg.Execute(UrlRes)
-}
+//
+//func TestFofaDebug() {
+//	plg := customplugin.NewPlugin("TargetHandler", "11111", plugin.Install, plugin.Check, plugin.Execute, plugin.Uninstall, plugin.GetName)
+//	plg.SetParameter("")
+//	plg.Execute("baidu.com")
+//}
+//
+//func TestFofa(plgPath string) {
+//	// plugin id
+//	plgId := utils.Tools.GenerateRandomString(8)
+//	// plugin module name
+//	plgModule := "TargetHandler"
+//	// plugin path
+//	plgPath = filepath.Join(plgPath, "TargetHandler", "fofa", "plugin.go")
+//
+//	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+//	if err != nil {
+//		return
+//	}
+//
+//	fmt.Printf("plugin name: %v\n", plugin.GetName())
+//	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+//	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+//	result := make(chan interface{})
+//	plugin.SetParameter("")
+//	plugin.SetTaskId("1111")
+//	plugin.SetTaskName("demo")
+//	plugin.SetResult(result)
+//
+//	go func() {
+//		_, err = plugin.Execute("baidu.com")
+//		if err != nil {
+//			return
+//		}
+//	}()
+//	for data := range result {
+//		fmt.Println(data) // 打印接收到的数据
+//	}
+//}
 
-func TestSSRFScan(plgPath string) {
-	// plugin id
-	plgId := utils.Tools.GenerateRandomString(8)
-	// plugin module name
-	plgModule := "URLSecurity"
-	// plugin path
-	plgPath = filepath.Join(plgPath, "URLSecurity", "SSRFScan", "plugin.go")
-
-	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
-	if err != nil {
-		return
-	}
-
-	fmt.Printf("plugin name: %v\n", plugin.GetName())
-	fmt.Printf("plugin module: %v\n", plugin.GetModule())
-	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
-	result := make(chan interface{})
-	plugin.SetParameter("-parfile 674c411aaa621e265dc1815a -dnslog fde390d9.log.dnslog.sbs")
-	plugin.SetTaskId("1111")
-	plugin.SetTaskName("demo")
-	plugin.SetResult(result)
-	_, err = plugin.Execute(UrlRes)
-	if err != nil {
-		return
-	}
-}
-
-func TestEHoleDebug() {
-	op := options.PluginOption{
-		Name:      "EHole",
-		Module:    "AssetHandle",
-		Parameter: "-finger dwa -thread 20",
-		PluginId:  "11111",
-		Ctx:       contextmanager.GlobalContextManagers.GetContext("111111"),
-	}
-	plugin.Execute(&AssetHttpData, op)
-}
-
-func TestEHole(plgPath string) {
-	// plugin id
-	plgId := utils.Tools.GenerateRandomString(8)
-	// plugin module name
-	plgModule := "AssetHandle"
-	// plugin path
-	plgPath = filepath.Join(plgPath, "AssetHandle", "ehole", "plugin.go")
-
-	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
-	if err != nil {
-		return
-	}
-
-	fmt.Printf("plugin name: %v\n", plugin.GetName())
-	fmt.Printf("plugin module: %v\n", plugin.GetModule())
-	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
-	result := make(chan interface{})
-	plugin.SetParameter("-finger dwa -thread 20")
-	plugin.SetTaskId("1111")
-	plugin.SetTaskName("demo")
-	plugin.SetResult(result)
-	fmt.Printf("AssetHttpData original Technologies: %v\n", AssetHttpData.Technologies)
-	_, err = plugin.Execute(&AssetHttpData)
-	if err != nil {
-		return
-	}
-	fmt.Printf("AssetHttpData Technologies%v\n", AssetHttpData.Technologies)
-}
-
-func TestAssetHandle(plgPath string) {
-	// plugin id
-	plgId := utils.Tools.GenerateRandomString(8)
-	// plugin module name
-	plgModule := "AssetHandle"
-	// plugin path
-	plgPath = filepath.Join(plgPath, "AssetHandle", "demo", "plugin.go")
-
-	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
-	if err != nil {
-		return
-	}
-
-	fmt.Printf("plugin name: %v\n", plugin.GetName())
-	fmt.Printf("plugin module: %v\n", plugin.GetModule())
-	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
-	result := make(chan interface{})
-	plugin.SetParameter("")
-	plugin.SetTaskId("1111")
-	plugin.SetTaskName("demo")
-	plugin.SetResult(result)
-	fmt.Printf("AssetHttpData original tags: %v\n", AssetHttpData.Tags)
-	_, err = plugin.Execute(&AssetHttpData)
-	if err != nil {
-		return
-	}
-	fmt.Printf("AssetHttpData tags%v\n", AssetHttpData.Tags)
-}
-
-func TestSubdomainScan(plgPath string) {
-	// plugin id
-	plgId := utils.Tools.GenerateRandomString(8)
-	// plugin module name
-	plgModule := "SubdomainScan"
-	// plugin path
-	plgPath = filepath.Join(plgPath, "SubdomainScan", "demo", "plugin.go")
-
-	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
-	if err != nil {
-		fmt.Printf("%v", err)
-		return
-	}
-
-	fmt.Printf("plugin name: %v\n", plugin.GetName())
-	fmt.Printf("plugin module: %v\n", plugin.GetModule())
-	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
-	result := make(chan interface{})
-	plugin.SetParameter("")
-	plugin.SetTaskId("1111")
-	plugin.SetTaskName("demo")
-	plugin.SetResult(result)
-	go func() {
-		for r := range result {
-			jsonData, _ := json.Marshal(r)
-			fmt.Printf("result %v", string(jsonData))
-		}
-	}()
-	_, err = plugin.Execute("example.com")
-	if err != nil {
-		return
-	}
-	time.Sleep(3 * time.Second)
-	fmt.Printf("plugin name: %v\n", plugin.GetName())
-	fmt.Printf("plugin module: %v\n", plugin.GetModule())
-	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
-
-}
+//
+//func TestSSRFScanDebug() {
+//	plg := customplugin.NewPlugin("AssetHandle", "11111", plugin.Install, plugin.Check, plugin.Execute, plugin.Uninstall, plugin.GetName)
+//	plg.SetParameter("-parfile 674c411aaa621e265dc1815a -dnslog fde390d9.log.dnslog.sbs")
+//	plg.Execute(UrlRes)
+//}
+//
+//func TestSSRFScan(plgPath string) {
+//	// plugin id
+//	plgId := utils.Tools.GenerateRandomString(8)
+//	// plugin module name
+//	plgModule := "URLSecurity"
+//	// plugin path
+//	plgPath = filepath.Join(plgPath, "URLSecurity", "SSRFScan", "plugin.go")
+//
+//	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+//	if err != nil {
+//		return
+//	}
+//
+//	fmt.Printf("plugin name: %v\n", plugin.GetName())
+//	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+//	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+//	result := make(chan interface{})
+//	plugin.SetParameter("-parfile 674c411aaa621e265dc1815a -dnslog fde390d9.log.dnslog.sbs")
+//	plugin.SetTaskId("1111")
+//	plugin.SetTaskName("demo")
+//	plugin.SetResult(result)
+//	_, err = plugin.Execute(UrlRes)
+//	if err != nil {
+//		return
+//	}
+//}
+//
+//func TestEHoleDebug() {
+//	op := options.PluginOption{
+//		Name:      "EHole",
+//		Module:    "AssetHandle",
+//		Parameter: "-finger dwa -thread 20",
+//		PluginId:  "11111",
+//		Ctx:       contextmanager.GlobalContextManagers.GetContext("111111"),
+//	}
+//	plugin.Execute(&AssetHttpData, op)
+//}
+//
+//func TestEHole(plgPath string) {
+//	// plugin id
+//	plgId := utils.Tools.GenerateRandomString(8)
+//	// plugin module name
+//	plgModule := "AssetHandle"
+//	// plugin path
+//	plgPath = filepath.Join(plgPath, "AssetHandle", "ehole", "plugin.go")
+//
+//	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+//	if err != nil {
+//		return
+//	}
+//
+//	fmt.Printf("plugin name: %v\n", plugin.GetName())
+//	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+//	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+//	result := make(chan interface{})
+//	plugin.SetParameter("-finger dwa -thread 20")
+//	plugin.SetTaskId("1111")
+//	plugin.SetTaskName("demo")
+//	plugin.SetResult(result)
+//	fmt.Printf("AssetHttpData original Technologies: %v\n", AssetHttpData.Technologies)
+//	_, err = plugin.Execute(&AssetHttpData)
+//	if err != nil {
+//		return
+//	}
+//	fmt.Printf("AssetHttpData Technologies%v\n", AssetHttpData.Technologies)
+//}
+//
+//func TestAssetHandle(plgPath string) {
+//	// plugin id
+//	plgId := utils.Tools.GenerateRandomString(8)
+//	// plugin module name
+//	plgModule := "AssetHandle"
+//	// plugin path
+//	plgPath = filepath.Join(plgPath, "AssetHandle", "demo", "plugin.go")
+//
+//	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+//	if err != nil {
+//		return
+//	}
+//
+//	fmt.Printf("plugin name: %v\n", plugin.GetName())
+//	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+//	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+//	result := make(chan interface{})
+//	plugin.SetParameter("")
+//	plugin.SetTaskId("1111")
+//	plugin.SetTaskName("demo")
+//	plugin.SetResult(result)
+//	fmt.Printf("AssetHttpData original tags: %v\n", AssetHttpData.Tags)
+//	_, err = plugin.Execute(&AssetHttpData)
+//	if err != nil {
+//		return
+//	}
+//	fmt.Printf("AssetHttpData tags%v\n", AssetHttpData.Tags)
+//}
+//
+//func TestSubdomainScan(plgPath string) {
+//	// plugin id
+//	plgId := utils.Tools.GenerateRandomString(8)
+//	// plugin module name
+//	plgModule := "SubdomainScan"
+//	// plugin path
+//	plgPath = filepath.Join(plgPath, "SubdomainScan", "demo", "plugin.go")
+//
+//	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+//	if err != nil {
+//		fmt.Printf("%v", err)
+//		return
+//	}
+//
+//	fmt.Printf("plugin name: %v\n", plugin.GetName())
+//	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+//	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+//	result := make(chan interface{})
+//	plugin.SetParameter("")
+//	plugin.SetTaskId("1111")
+//	plugin.SetTaskName("demo")
+//	plugin.SetResult(result)
+//	go func() {
+//		for r := range result {
+//			jsonData, _ := json.Marshal(r)
+//			fmt.Printf("result %v", string(jsonData))
+//		}
+//	}()
+//	_, err = plugin.Execute("example.com")
+//	if err != nil {
+//		return
+//	}
+//	time.Sleep(3 * time.Second)
+//	fmt.Printf("plugin name: %v\n", plugin.GetName())
+//	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+//	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+//
+//}
 
 func Init() {
 	// 初始化系统信息

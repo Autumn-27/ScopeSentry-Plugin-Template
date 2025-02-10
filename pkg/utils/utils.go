@@ -50,6 +50,8 @@ import (
 
 type UtilTools struct {
 	CdnCheckClient *cdncheck.Client
+	fileLocks      map[string]*sync.Mutex
+	fileMu         sync.Mutex
 }
 
 var Tools *UtilTools
@@ -58,6 +60,7 @@ func InitializeTools() {
 	client := cdncheck.New()
 	Tools = &UtilTools{
 		CdnCheckClient: client,
+		fileLocks:      make(map[string]*sync.Mutex),
 	}
 }
 
@@ -163,7 +166,7 @@ func (t *UtilTools) WriteContentFile(filPath string, fileContent string) error {
 	return t.WriteByteContentFile(filPath, []byte(fileContent))
 }
 
-// WriteByteContentFile 将byte写入指定文件
+// WriteByteContentFile 将byte写入指定文件, 覆盖写入
 func (t *UtilTools) WriteByteContentFile(filPath string, fileContent []byte) error {
 	// 将字符串写入文件
 	err := t.EnsureFilePathExists(filPath)
@@ -172,6 +175,59 @@ func (t *UtilTools) WriteByteContentFile(filPath string, fileContent []byte) err
 	}
 	if err := ioutil.WriteFile(filPath, fileContent, 0666); err != nil {
 		logger.SlogErrorLocal(fmt.Sprintf("Failed to create filPath: %s - %s", filPath, err))
+		return err
+	}
+	return nil
+}
+
+// WriteContentFileAppend 将字符串写入指定文件
+func (t *UtilTools) WriteContentFileAppend(filPath string, fileContent string) error {
+	// 将字符串写入文件
+	return t.AppendOrCreateFile(filPath, []byte(fileContent))
+}
+
+// getFileLock 获取文件锁
+func (t *UtilTools) GetFileLock(filePath string) *sync.Mutex {
+	t.fileMu.Lock()
+	defer t.fileMu.Unlock()
+
+	if _, exists := t.fileLocks[filePath]; !exists {
+		t.fileLocks[filePath] = &sync.Mutex{}
+	}
+	return t.fileLocks[filePath]
+}
+
+// ClearAllLocks 清空所有文件锁
+func (t *UtilTools) ClearAllLocks() {
+	t.fileMu.Lock()
+	defer t.fileMu.Unlock()
+
+	t.fileLocks = make(map[string]*sync.Mutex) // 创建新的空 map，旧的会被垃圾回收
+}
+
+// AppendOrCreateFile 追加写入文件，如果文件不存在则创建
+func (t *UtilTools) AppendOrCreateFile(filePath string, fileContent []byte) error {
+	lock := t.GetFileLock(filePath)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// 确保文件路径存在
+	err := t.EnsureFilePathExists(filePath)
+	if err != nil {
+		return err
+	}
+
+	// 打开文件，支持追加写入或创建新文件
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		logger.SlogErrorLocal(fmt.Sprintf("Failed to open or create file: %s - %s", filePath, err))
+		return err
+	}
+	defer file.Close()
+
+	// 写入内容
+	if _, err := file.Write(fileContent); err != nil {
+		logger.SlogErrorLocal(fmt.Sprintf("Failed to write to file: %s - %s", filePath, err))
 		return err
 	}
 	return nil
@@ -1139,4 +1195,9 @@ func (t *UtilTools) CompressAndEncodeScreenshot(screenshotBytes []byte, scaleFac
 	}
 
 	return base64.StdEncoding.EncodeToString(buf.Bytes())
+}
+
+// Command 简介调用exec.Command
+func (t *UtilTools) Command(name string, arg ...string) *exec.Cmd {
+	return exec.Command(name, arg...)
 }

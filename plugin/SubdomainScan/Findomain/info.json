@@ -1,0 +1,8 @@
+{
+    "help":"-et 执行超时时间",
+    "parameter":"-et 20",
+    "name":"Findomain",
+    "module": "SubdomainScan",
+    "version":"v1.0",
+    "introduction":"工具Fdindomain子域名扫描模块"
+  }

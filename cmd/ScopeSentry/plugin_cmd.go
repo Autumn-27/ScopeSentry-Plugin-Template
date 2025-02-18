@@ -125,7 +125,44 @@ func main() {
 	//TestSSRFScan(plgPath)
 	//TestFofa(plgPath)
 	//TestFofaDebug()
-	TestXray(plgPath)
+	//TestXray(plgPath)
+	TestAi(plgPath)
+}
+
+func TestAi(plgPath string) {
+	// plugin id
+	plgId := utils.Tools.GenerateRandomString(8)
+	// plugin module name
+	plgModule := "VulnerabilityScan"
+	// plugin path
+	plgPath = filepath.Join(plgPath, "VulnerabilityScan", "AI-Infra-Guard", "plugin.go")
+
+	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("plugin name: %v\n", plugin.GetName())
+	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+	result := make(chan interface{})
+	plugin.SetParameter("")
+	plugin.SetTaskId("1111")
+	plugin.SetTaskName("demo")
+	plugin.SetResult(result)
+	plugin.Install()
+	var input []types.AssetHttp
+	input = append(input, AssetHttpData)
+	go func() {
+		_, err = plugin.Execute(input)
+		if err != nil {
+			return
+		}
+	}()
+	for data := range result {
+		fmt.Println(data) // 打印接收到的数据
+	}
 }
 
 func TestXray(plgPath string) {
@@ -163,6 +200,9 @@ func TestXray(plgPath string) {
 	fmt.Scanln(&input) // 获取用户输入
 	if input == "2" {
 		plugin.SetCustom("close task")
+	}
+	for data := range result {
+		fmt.Println(data) // 打印接收到的数据
 	}
 }
 

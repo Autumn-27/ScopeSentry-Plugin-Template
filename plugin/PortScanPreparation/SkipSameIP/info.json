@@ -1,0 +1,8 @@
+{
+  "help":"",
+  "parameter":"",
+  "name":"SkipSameIP",
+  "module": "PortScanPreparation",
+  "version":"v1.0",
+  "introduction":"端口扫描跳过相同IP"
+}

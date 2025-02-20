@@ -191,6 +191,9 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 			op.Log(fmt.Sprintf("json.Unmarshal %v error: %v", line, err))
 			continue
 		}
+		if result.UrlString == data.URL {
+			continue
+		}
 		var DirResult types.DirResult
 		DirResult.Url = result.UrlString
 		DirResult.Status = result.Status

@@ -126,7 +126,43 @@ func main() {
 	//TestFofa(plgPath)
 	//TestFofaDebug()
 	//TestXray(plgPath)
-	TestAi(plgPath)
+	//TestAi(plgPath)
+	TestDep(plgPath)
+}
+
+func TestDep(plgPath string) {
+	// plugin id
+	plgId := utils.Tools.GenerateRandomString(8)
+	// plugin module name
+	plgModule := "URLSecurity"
+	// plugin path
+	plgPath = filepath.Join(plgPath, "URLSecurity", "DependencyConfusion", "plugin.go")
+	plugin, err := plugins.LoadCustomPlugin(plgPath, plgModule, plgId)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Printf("plugin name: %v\n", plugin.GetName())
+	fmt.Printf("plugin module: %v\n", plugin.GetModule())
+	fmt.Printf("plugin id: %v\n", plugin.GetPluginId())
+	result := make(chan interface{})
+	plugin.SetParameter("")
+	plugin.SetTaskId("1111")
+	plugin.SetTaskName("demo")
+	plugin.SetResult(result)
+	plugin.Install()
+	var input []types.AssetHttp
+	input = append(input, AssetHttpData)
+	go func() {
+		_, err = plugin.Execute(input)
+		if err != nil {
+			return
+		}
+	}()
+	for data := range result {
+		fmt.Println(data) // 打印接收到的数据
+	}
 }
 
 func TestAi(plgPath string) {

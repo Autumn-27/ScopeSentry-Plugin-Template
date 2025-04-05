@@ -8,6 +8,7 @@
 package plugin
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/global"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
@@ -93,19 +94,34 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 				rootDomainResult.ICP = res[0].ICP
 				rootDomainResult.Company = res[0].Company
 				global.TmpCustomMapParameter.Store(LastSplitOnce(rootDomainResult.ICP, "-"), rootDomainResult.Company)
+			} else {
+				// 如果beian.cn没有找到信息，尝试使用miit接口查询
+				if GetMiitApi() != "" {
+					miitWebRes, err := GetWebByMiit(rootDomainResult.Domain, map[string]bool{})
+					if err == nil {
+						// 如果没有报错
+						if len(miitWebRes) != 0 {
+							rootDomainResult.ICP = miitWebRes[0].ICP
+							rootDomainResult.Company = miitWebRes[0].Company
+						}
+					}
+				}
+
 			}
 		} else {
 			//域名在当前任务中已经查过了 后边也不用走了 直接返回
 			return nil, nil
 		}
 	}
+	var domainList map[string]bool
+	domainList[rootDomainResult.Domain] = true
 	// 将初始结果发送到结果处理
 	op.ResultFunc(rootDomainResult)
 	var allRootDomain []ICPinfo
+	tmpIcp := LastSplitOnce(rootDomainResult.ICP, "-")
 	// 根据icp查询更多的根域名
 	if rootDomainResult.ICP != "" {
 		// 如果icp不为空的话  根据icp 查更多的根域名
-		tmpIcp := LastSplitOnce(rootDomainResult.ICP, "-")
 		locakKey := "duplicates:" + op.TaskId + ":icp:" + tmpIcp
 		keyRedis := "duplicates:" + op.TaskId + ":icp"
 		valueRedis := tmpIcp
@@ -118,28 +134,49 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 				for _, r := range allRootDomain {
 					if r.Domain != rootDomainResult.Domain {
 						op.ResultFunc(types.RootDomain{Domain: r.Domain, ICP: r.ICP, Company: r.Company})
+						domainList[r.Domain] = true
 					}
 				}
 			}
 		}
 	}
-	// 由于app、小程序接口依赖于miit接口 所以如果miit接口是空的就返回，据了解零零信安的接口也可以查询app和小程序，我这没有vip，期待其他师傅补充零零信安的接口
+	// 由于app、小程序接口依赖于miit接口 所以如果miit接口是空的就返回，据了解零零信安的接口也可以查询app和小程序 可以通过rootDomainResult的公司名进行查找
+	// 我这没有vip，期待其他师傅补充零零信安的接口
 	if GetMiitApi() == "" {
 		return nil, nil
 	}
-	// 根据公司名查找app、小程序 通过miit接口查询
-	if rootDomainResult.Company != "" {
-		locakKey := "duplicates:" + op.TaskId + ":miit:" + rootDomainResult.Company
+	// 根据icp查找根域名、app、小程序 通过miit接口查询
+	if rootDomainResult.ICP != "" {
+		locakKey := "duplicates:" + op.TaskId + ":miit:" + tmpIcp
 		keyRedis := "duplicates:" + op.TaskId + ":miit"
-		valueRedis := rootDomainResult.Company
+		valueRedis := tmpIcp
 		flag := results.Duplicate.Custom(locakKey, keyRedis, valueRedis)
 		if flag {
-			// 该公司没有查过零零信安接口
-
+			// 该公司没有通过miit查询过, 根据icp查询更多的根域名
+			miitWebRes, err := GetWebByMiit(tmpIcp, domainList)
+			if err != nil {
+				return nil, err
+			}
+			for _, r := range miitWebRes {
+				op.ResultFunc(types.RootDomain{Domain: r.Domain, ICP: r.ICP, Company: r.Company})
+			}
+			// 查询app
+			miitAppRes, err := GetAppByMiit(tmpIcp)
+			if err != nil {
+				return nil, err
+			}
+			for _, r := range miitAppRes {
+				op.ResultFunc(r)
+			}
+			// 查询小程序
+			miitMappRes, err := MiitMappApi(tmpIcp)
+			if err != nil {
+				return nil, err
+			}
+			for _, r := range miitMappRes {
+				op.ResultFunc(r)
+			}
 		}
-	} else {
-		// 如果公司名为空 说明上边的beian接口查询失败 使用miit接口尝试
-
 	}
 
 	return nil, nil
@@ -149,8 +186,194 @@ func GetMiitApi() string {
 	return MIITAPI
 }
 
-func GetWebByMiit(str string) {
-	api := GetMiitApi() + "/query/app?search=" + str + "&pageSize=40"
+type MiitWebResponse struct {
+	Code    int    `json:"code"`
+	Msg     string `json:"msg"`
+	Success bool   `json:"success"`
+	Params  Params `json:"params"`
+}
+
+type Params struct {
+	EndRow           int        `json:"endRow"`
+	FirstPage        int        `json:"firstPage"`
+	HasNextPage      bool       `json:"hasNextPage"`
+	HasPreviousPage  bool       `json:"hasPreviousPage"`
+	IsFirstPage      bool       `json:"isFirstPage"`
+	IsLastPage       bool       `json:"isLastPage"`
+	LastPage         int        `json:"lastPage"`
+	List             []UnitInfo `json:"list"`
+	NavigatePages    int        `json:"navigatePages"`
+	NavigatePageNums []int      `json:"navigatepageNums"`
+	NextPage         int        `json:"nextPage"`
+	PageNum          int        `json:"pageNum"`
+	PageSize         int        `json:"pageSize"`
+	Pages            int        `json:"pages"`
+	PrePage          int        `json:"prePage"`
+	Size             int        `json:"size"`
+	StartRow         int        `json:"startRow"`
+	Total            int        `json:"total"`
+}
+
+type UnitInfo struct {
+	CityID           int    `json:"cityId"`
+	CountyID         int    `json:"countyId"`
+	DataID           int    `json:"dataId"`
+	LeaderName       string `json:"leaderName"`
+	MainID           string `json:"mainId"`
+	MainLicence      string `json:"mainLicence"`
+	MainUnitAddress  string `json:"mainUnitAddress"`
+	MainUnitCertNo   string `json:"mainUnitCertNo"`
+	MainUnitCertType int    `json:"mainUnitCertType"`
+	NatureID         int    `json:"natureId"`
+	NatureName       string `json:"natureName"`
+	ProvinceID       int    `json:"provinceId"`
+	ServiceID        int    `json:"serviceId"`
+	ServiceLicence   string `json:"serviceLicence"`
+	ServiceName      string `json:"serviceName"`
+	ServiceType      int    `json:"serviceType"`
+	UnitName         string `json:"unitName"`
+	UpdateRecordTime string `json:"updateRecordTime"`
+	Version          string `json:"version"`
+	Domain           string `json:"domain"`
+}
+
+func MiitApi(str string, pageSize int, retryCount int, tp string) (MiitWebResponse, error) {
+	// 判断是否已用完重试次数
+	if retryCount <= 0 {
+		return MiitWebResponse{}, fmt.Errorf("max retries reached")
+	}
+
+	api := GetMiitApi() + fmt.Sprintf("/query/%v?search=", tp) + str + "&pageSize=40" + fmt.Sprintf("&pageNum=%v", pageSize)
+	timeout := 5 * time.Second
+	maxRetries := 3
+	retryInterval := 2 * time.Second
+	headers := map[string]string{}
+	proxy := ""
+	// 获取第一页数据 获取总页数
+	resp, err := utils.Requests.HttpGetWithRetry(api,
+		timeout,       // 超时时间
+		maxRetries,    // 最大重试次数
+		retryInterval, // 重试间隔
+		headers,       // 请求头
+		proxy,         // 代理地址
+	)
+	var miitWebResponse MiitWebResponse
+	if resp.StatusCode != 200 {
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v error page 1, resp.StatusCode %v", GetName(), str, resp.StatusCode))
+		return miitWebResponse, fmt.Errorf("not 200")
+	}
+	defer resp.Body.Close()
+	// 读取响应内容
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v Failed to read body %v", GetName(), str, err))
+		return miitWebResponse, err
+	}
+	err = json.Unmarshal(body, &miitWebResponse)
+	if err != nil {
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v Error unmarshalling response: %v", GetName(), str, err))
+		return miitWebResponse, err
+	}
+
+	// 如果code不是200，进行递归调用并减少retryCount
+	if miitWebResponse.Code != 200 {
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v code %v, retrying %v", GetName(), str, miitWebResponse.Code, retryCount-1))
+		return MiitApi(str, pageSize, retryCount-1, tp)
+	}
+
+	return miitWebResponse, nil
+}
+
+func GetAppByMiit(str string) ([]types.APP, error) {
+	var result []types.APP
+	// 获取第一页数据 获取总页数
+	res, err := MiitApi(str, 1, 5, "app")
+	if err != nil {
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v error page 1: %v", GetName(), str, err))
+		return result, err
+	}
+	if len(res.Params.List) != 0 {
+		for _, r := range res.Params.List {
+			result = append(result, types.APP{ICP: r.ServiceLicence, Name: r.ServiceName, Company: r.UnitName})
+		}
+	}
+	for i := 2; i <= res.Params.Pages; i++ {
+		res, err = MiitApi(str, i, 5, "app")
+		if err != nil {
+			logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v error page 1: %v", GetName(), str, err))
+			return result, err
+		}
+		if len(res.Params.List) != 0 {
+			for _, r := range res.Params.List {
+				result = append(result, types.APP{ICP: r.ServiceLicence, Name: r.ServiceName, Company: r.UnitName})
+			}
+		}
+	}
+	return result, nil
+}
+
+func MiitMappApi(str string) ([]types.MP, error) {
+	var result []types.MP
+	// 获取第一页数据 获取总页数
+	res, err := MiitApi(str, 1, 5, "mapp")
+	if err != nil {
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v error page 1: %v", GetName(), str, err))
+		return result, err
+	}
+	if len(res.Params.List) != 0 {
+		for _, r := range res.Params.List {
+			result = append(result, types.MP{ICP: r.ServiceLicence, Name: r.ServiceName, Company: r.UnitName})
+		}
+	}
+	for i := 2; i <= res.Params.Pages; i++ {
+		res, err = MiitApi(str, i, 5, "app")
+		if err != nil {
+			logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v error page 1: %v", GetName(), str, err))
+			return result, err
+		}
+		if len(res.Params.List) != 0 {
+			for _, r := range res.Params.List {
+				result = append(result, types.MP{ICP: r.ServiceLicence, Name: r.ServiceName, Company: r.UnitName})
+			}
+		}
+	}
+	return result, nil
+}
+
+func GetWebByMiit(str string, domainList map[string]bool) ([]ICPinfo, error) {
+	var result []ICPinfo
+	// 获取第一页数据 获取总页数
+	res, err := MiitApi(str, 1, 5, "web")
+	if err != nil {
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v error page 1: %v", GetName(), str, err))
+		return result, err
+	}
+	if len(res.Params.List) != 0 {
+		for _, r := range res.Params.List {
+			_, e := domainList[r.Domain]
+			if !e {
+				result = append(result, ICPinfo{Domain: r.Domain, ICP: r.ServiceLicence, Company: r.UnitName})
+				domainList[r.Domain] = true
+			}
+		}
+	}
+	for i := 2; i <= res.Params.Pages; i++ {
+		res, err = MiitApi(str, i, 5, "web")
+		if err != nil {
+			logger.SlogWarnLocal(fmt.Sprintf("[%v] GetWebByMiit %v error page 1: %v", GetName(), str, err))
+			return result, err
+		}
+		if len(res.Params.List) != 0 {
+			for _, r := range res.Params.List {
+				_, e := domainList[r.Domain]
+				if !e {
+					result = append(result, ICPinfo{Domain: r.Domain, ICP: r.ServiceLicence, Company: r.UnitName})
+					domainList[r.Domain] = true
+				}
+			}
+		}
+	}
+	return result, nil
 }
 
 func LastSplitOnce(s, sep string) (before string) {
@@ -178,7 +401,7 @@ func GetIcp(domain string) []ICPinfo {
 	url := fmt.Sprintf("https://www.beianx.cn/search/%v", domain)
 	timeout := 5 * time.Second
 	maxRetries := 3
-
+	retryInterval := 2 * time.Second
 	// 尝试请求，最多重试 maxRetries 次
 	var resp *http.Response
 	var err error
@@ -188,7 +411,7 @@ func GetIcp(domain string) []ICPinfo {
 		url,
 		timeout,       // 超时时间
 		maxRetries,    // 最大重试次数
-		2*time.Second, // 重试间隔
+		retryInterval, // 重试间隔
 		headers,       // 请求头
 		proxy,         // 代理地址
 	)
@@ -198,7 +421,7 @@ func GetIcp(domain string) []ICPinfo {
 		logger.SlogWarnLocal(fmt.Sprintf("[%v] domain %v Failed to make request after %d attempts: %v", GetName(), domain, maxRetries, err))
 		return result
 	}
-	if resp.Status != "200 OK" {
+	if resp.StatusCode != 200 {
 		logger.SlogWarnLocal(fmt.Sprintf("[%v] domain %v Failed to query %v", GetName(), domain, resp.Status))
 		return result
 	}

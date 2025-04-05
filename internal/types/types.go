@@ -8,6 +8,7 @@ package types
 
 import (
 	"encoding/json"
+	"github.com/dlclark/regexp2"
 	"github.com/projectdiscovery/katana/pkg/navigation"
 	"github.com/projectdiscovery/tlsx/pkg/tlsx/clients"
 	"go.mongodb.org/mongo-driver/bson"
@@ -179,12 +180,13 @@ type DirResult struct {
 }
 
 type SensitiveRule struct {
-	ID      string   `json:"id"`
-	Name    string   `json:"name"`
-	State   bool     `json:"enabled"`
-	Regular string   `json:"pattern"`
-	Color   string   `bson:"color"`
-	Tags    []string `bson:"tags"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	State       bool     `json:"enabled"`
+	Regular     string   `json:"pattern"`
+	Color       string   `bson:"color"`
+	Tags        []string `bson:"tags"`
+	RuleCompile *regexp2.Regexp
 }
 
 type SensitiveResult struct {
@@ -282,6 +284,7 @@ type DomainSkip struct {
 	Domain string
 	Skip   bool
 	IP     []string
+	CIDR   bool
 }
 type DomainResolve struct {
 	Domain string
@@ -319,4 +322,44 @@ type PageMonitBody struct {
 type BulkUpdateOperation struct {
 	Selector bson.M // 条件选择器数组
 	Update   bson.M // 更新内容数组
+}
+
+type RootDomain struct {
+	Domain   string   `bson:"domain"`
+	ICP      string   `bson:"icp"`
+	Company  string   `bson:"company"`
+	Tags     []string `bson:"tags"`
+	TaskName string   `bson:"taskName"`
+	Project  string   `bson:"project"`
+	Time     string   `bson:"time"`
+}
+
+type APP struct {
+	Name        string   `bson:"name"`
+	Version     string   `bson:"version"`
+	Url         string   `bson:"url"`
+	ICP         string   `bson:"icp"`
+	FilePath    string   `bson:"-"`
+	Company     string   `bson:"company"`
+	BundleID    string   `bson:"bundleID"`
+	Category    string   `bson:"category"`
+	Description string   `bson:"description"`
+	Logo        string   `bson:"logo"`
+	Tags        []string `bson:"tags"`
+	TaskName    string   `bson:"taskName"`
+	Project     string   `bson:"project"`
+	Time        string   `bson:"time"`
+}
+
+type MP struct {
+	Name        string   `bson:"name"`
+	Url         string   `bson:"url"`
+	ICP         string   `bson:"icp"`
+	Description string   `bson:"description"`
+	Company     string   `bson:"company"`
+	FilePath    string   `bson:"-"`
+	Tags        []string `bson:"tags"`
+	TaskName    string   `bson:"taskName"`
+	Project     string   `bson:"project"`
+	Time        string   `bson:"time"`
 }

@@ -19,7 +19,11 @@ import (
 	"github.com/projectdiscovery/httpx/runner"
 	wappalyzer "github.com/projectdiscovery/wappalyzergo"
 	"github.com/valyala/fasthttp"
+	"io"
+	"math"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"syscall"
 	"time"
@@ -47,6 +51,8 @@ func InitializeRequests() {
 		DisableHeaderNamesNormalizing: true,
 		DisablePathNormalizing:        true,
 		TLSConfig:                     tlsConfig,
+		ReadBufferSize:                4 * 1024 * 1024,
+		MaxResponseBodySize:           10 * 1024 * 1024,
 		Dial: (&fasthttp.TCPDialer{
 			Concurrency:      4096,
 			DNSCacheDuration: time.Hour,
@@ -69,21 +75,13 @@ func (r *request) HttpGet(uri string) (types.HttpResponse, error) {
 	}()
 	req.Header.SetMethod(fasthttp.MethodGet)
 	req.SetRequestURI(uri)
-
 	if err := HttpClient.Do(req, resp); err != nil {
 		return types.HttpResponse{}, err
 	}
 	tmp := types.HttpResponse{}
 	tmp.Url = uri
-	// 定义最大响应体大小 (100KB)
-	const maxBodySize = 100 * 1024
 
-	// 截断 Body
-	body := resp.Body()
-	if len(body) > maxBodySize {
-		body = body[:maxBodySize]
-	}
-	tmp.Body = string(body)
+	tmp.Body = string(resp.Body())
 	tmp.StatusCode = resp.StatusCode()
 	if location := resp.Header.Peek("location"); len(location) > 0 {
 		tmp.Redirect = string(location)
@@ -161,7 +159,7 @@ func (r *request) HttpGetWithCustomHeader(uri string, customHeaders []string) (t
 	tmp := types.HttpResponse{}
 	tmp.Url = uri
 	// 定义最大响应体大小 (100KB)
-	const maxBodySize = 100 * 1024
+	const maxBodySize = 4 * 1024 * 1024
 
 	// 截断 Body
 	body := resp.Body()
@@ -401,6 +399,7 @@ func (r *request) Httpx(targets []string, resultCallback func(r types.AssetHttp)
 	options := runner.Options{
 		CustomHeaders:             customHeaders,
 		FollowRedirects:           followRedirects,
+		MaxRedirects:              5,
 		RandomAgent:               true,
 		Methods:                   "GET",
 		JSONOutput:                false,
@@ -424,7 +423,7 @@ func (r *request) Httpx(targets []string, resultCallback func(r types.AssetHttp)
 		HostMaxErrors:             30,
 		StoreResponse:             false,
 		StoreChain:                false,
-		MaxResponseBodySizeToRead: 100000,
+		MaxResponseBodySizeToRead: math.MaxInt32,
 		Screenshot:                screenshot,
 		ScreenshotTimeout:         time.Duration(screenshotTimeout) * time.Second,
 		Timeout:                   10,
@@ -476,4 +475,137 @@ func (r *request) Httpx(targets []string, resultCallback func(r types.AssetHttp)
 	case <-done: // 扫描完成后继续执行
 		logger.SlogDebugLocal(fmt.Sprintf("HttpxScan for %s completed successfully", targets))
 	}
+}
+
+// HttpGetWithRetry 发起一个带重试机制和代理支持的 HTTP GET 请求。
+// 参数：
+//   - requestURL: 请求地址
+//   - timeout: 每次请求的超时时间
+//   - maxRetries: 最大重试次数
+//   - retryInterval: 每次重试之间的等待间隔
+//   - headers: 请求头（如 User-Agent）
+//   - proxyURL: 代理地址，若为空则不使用代理
+//
+// 返回：
+//   - *http.Response: 成功返回响应体指针
+//   - error: 若请求多次失败则返回最后的错误
+func (r *request) HttpGetWithRetry(requestURL string, timeout time.Duration, maxRetries int, retryInterval time.Duration, headers map[string]string, proxyURL string) (*http.Response, error) {
+	// 设置代理
+	var transport *http.Transport
+	if proxyURL != "" {
+		proxy, err := url.Parse(proxyURL)
+		if err != nil {
+			logger.SlogWarnLocal(fmt.Sprintf("Invalid proxy URL: %v", err))
+			return nil, err
+		}
+		// 配置代理
+		transport = &http.Transport{Proxy: http.ProxyURL(proxy)}
+	} else {
+		// 默认不使用代理
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+	}
+
+	// 创建 HTTP 客户端
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
+
+	var resp *http.Response
+	var err error
+
+	// 重试机制
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		req, reqErr := http.NewRequest("GET", requestURL, nil)
+		if reqErr != nil {
+			return nil, reqErr
+		}
+
+		// 设置请求头
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+
+		// 发起请求
+		resp, err = client.Do(req)
+		if err == nil {
+			return resp, nil
+		}
+
+		// 请求失败，记录日志并重试
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] GET attempt %d failed: %v", requestURL, attempt, err))
+		if attempt < maxRetries {
+			logger.SlogWarnLocal(fmt.Sprintf("Retrying GET %v after %v...", requestURL, retryInterval))
+			time.Sleep(retryInterval)
+		}
+	}
+
+	return nil, err
+}
+
+// HttpPostWithRetry 发起一个带重试机制和代理支持的 HTTP POST 请求。
+// 参数：
+//   - requestURL: 请求地址
+//   - body: 请求体（可以是 JSON、表单等）
+//   - timeout: 每次请求的超时时间
+//   - maxRetries: 最大重试次数
+//   - retryInterval: 每次重试之间的等待间隔
+//   - headers: 请求头（通常需设置 Content-Type）
+//   - proxyURL: 代理地址，若为空则不使用代理
+//
+// 返回：
+//   - *http.Response: 成功返回响应体指针
+//   - error: 若请求多次失败则返回最后的错误
+func (r *request) HttpPostWithRetry(requestURL string, body io.Reader, timeout time.Duration, maxRetries int, retryInterval time.Duration, headers map[string]string, proxyURL string) (*http.Response, error) {
+	// 设置代理
+	var transport *http.Transport
+	if proxyURL != "" {
+		proxy, err := url.Parse(proxyURL)
+		if err != nil {
+			logger.SlogWarnLocal(fmt.Sprintf("Invalid proxy URL: %v", err))
+			return nil, err
+		}
+		// 配置代理
+		transport = &http.Transport{Proxy: http.ProxyURL(proxy)}
+	} else {
+		// 默认不使用代理
+		transport = http.DefaultTransport.(*http.Transport).Clone()
+	}
+
+	// 创建 HTTP 客户端
+	client := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
+	}
+
+	var resp *http.Response
+	var err error
+
+	// 重试机制
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		req, reqErr := http.NewRequest("POST", requestURL, body)
+		if reqErr != nil {
+			return nil, reqErr
+		}
+
+		// 设置请求头
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+
+		// 发起请求
+		resp, err = client.Do(req)
+		if err == nil {
+			return resp, nil
+		}
+
+		// 请求失败，记录日志并重试
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] POST attempt %d failed: %v", requestURL, attempt, err))
+		if attempt < maxRetries {
+			logger.SlogWarnLocal(fmt.Sprintf("Retrying POST %v after %v...", requestURL, retryInterval))
+			time.Sleep(retryInterval)
+		}
+	}
+
+	return nil, err
 }

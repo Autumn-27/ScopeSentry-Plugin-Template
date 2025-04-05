@@ -83,6 +83,7 @@ func (d *duplicate) PortIntask(taskId string, host string, port string, isRestar
 	return false
 }
 
+// 返回true 表示 内存中不存在  返回false 表示存在 重复
 func (d *duplicate) DuplicateLocalCache(key string) bool {
 	_, err := bigcache.BigCache.Get(key)
 	if err != nil {
@@ -97,7 +98,7 @@ func (d *duplicate) DuplicateLocalCache(key string) bool {
 	return false
 }
 
-// DuplicateRedisCache 在key中查找是否存在value来进行去重
+// DuplicateRedisCache 在key中查找是否存在value来进行去重，返回true 表示不存在 不重复 返回false 表示已经存在了 重复
 func (d *duplicate) DuplicateRedisCache(key string, value string) bool {
 	ctx := context.Background()
 	exists, err := redis.RedisClient.SIsMember(ctx, key, value)
@@ -155,12 +156,12 @@ func (d *duplicate) Crawler(value string, taskId string) bool {
 
 func (d *duplicate) URLParams(rawUrl string) string {
 	parsedURL, err := url.Parse(rawUrl)
-	dupKey := utils.Tools.CalculateMD5(strings.TrimLeft(strings.TrimLeft(rawUrl, "http://"), "https://"))
+	dupKey := utils.Tools.CalculateMD5(strings.TrimPrefix(strings.TrimPrefix(strings.TrimSuffix(rawUrl, "/"), "http://"), "https://"))
 	if err != nil {
 	} else {
 		queryParams := parsedURL.Query()
 		if len(queryParams) > 0 {
-			paramskey := fmt.Sprintf("%s%s", parsedURL.Host, parsedURL.Path)
+			paramskey := fmt.Sprintf("%s%s", parsedURL.Host, strings.TrimSuffix(parsedURL.Path, "/"))
 			for key, _ := range queryParams {
 				paramskey += key
 			}
@@ -173,4 +174,34 @@ func (d *duplicate) URLParams(rawUrl string) string {
 func (d *duplicate) SensitiveBody(md5 string, taskId string) bool {
 	key := "duplicates:" + taskId + ":SensitiveBody:" + md5
 	return d.DuplicateLocalCache(key)
+}
+
+func (d *duplicate) DuplicateUrlFileKey(filename string, taskId string) bool {
+	key := "duplicates:" + taskId + ":urlfile:" + filename
+	if d.DuplicateLocalCache(key) {
+		keyRedis := "duplicates:" + taskId + ":urlfile"
+		valueRedis := filename
+		return d.DuplicateRedisCache(keyRedis, valueRedis)
+	} else {
+		return false
+	}
+}
+
+func (d *duplicate) RootDomain(domain string, taskId string) bool {
+	key := "duplicates:" + taskId + ":rootdomain:" + domain
+	if d.DuplicateLocalCache(key) {
+		keyRedis := "duplicates:" + taskId + ":rootdomain"
+		valueRedis := domain
+		return d.DuplicateRedisCache(keyRedis, valueRedis)
+	} else {
+		return false
+	}
+}
+
+func (d *duplicate) Custom(locakKey string, redisKey string, redisValue string) bool {
+	if d.DuplicateLocalCache(locakKey) {
+		return d.DuplicateRedisCache(redisKey, redisValue)
+	} else {
+		return false
+	}
 }

@@ -59,6 +59,9 @@ func (h *handler) Subdomain(result *types.SubdomainResult) {
 		logger.SlogInfoLocal(fmt.Sprintf("%v GetRootDomain error: %v", result.Host, err))
 	}
 	result.RootDomain = rootDomain
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	result.Project = h.GetAssetProject(rootDomain)
 	interfaceSlice = &result
 	if global.NotificationConfig.SubdomainScan {
@@ -112,6 +115,9 @@ func (h *handler) AssetOtherInsert(result *types.AssetOther) {
 		logger.SlogInfoLocal(fmt.Sprintf("%v GetRootDomain error: %v", result.Host, err))
 	}
 	result.RootDomain = rootDomain
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	result.Project = h.GetAssetProject(rootDomain)
 	interfaceSlice = &result
 	_, err = mongodb.MongodbClient.InsertOne("asset", interfaceSlice)
@@ -129,6 +135,9 @@ func (h *handler) AssetHttpInsert(result *types.AssetHttp) {
 		logger.SlogInfoLocal(fmt.Sprintf("%v GetRootDomain error: %v", result.Host, err))
 	}
 	result.RootDomain = rootDomain
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	result.Project = h.GetAssetProject(rootDomain)
 	interfaceSlice = &result
 	_, err = mongodb.MongodbClient.InsertOne("asset", interfaceSlice)
@@ -146,6 +155,9 @@ func (h *handler) URL(result *types.UrlResult) {
 	}
 	result.RootDomain = rootDomain
 	result.Project = h.GetAssetProject(rootDomain)
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	// 创建result的副本，并将Body设置为空
 	// 创建一个新的result对象，但Body设为空
 	resultCopy := types.UrlResult{
@@ -161,6 +173,8 @@ func (h *handler) URL(result *types.UrlResult) {
 		ResultId:   result.ResultId,
 		RootDomain: result.RootDomain,
 		Body:       "", // 设置Body为空
+		Tags:       result.Tags,
+		Ext:        result.Ext,
 	}
 	interfaceSlice = &resultCopy
 	ResultQueues["URLScan"].Queue <- interfaceSlice
@@ -173,6 +187,9 @@ func (h *handler) Crawler(result *types.CrawlerResult) {
 		logger.SlogInfoLocal(fmt.Sprintf("%v GetRootDomain error: %v", result.Url, err))
 	}
 	result.RootDomain = rootDomain
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	result.Project = h.GetAssetProject(rootDomain)
 	interfaceSlice = &result
 	ResultQueues["WebCrawler"].Queue <- interfaceSlice
@@ -185,31 +202,33 @@ func (h *handler) Sensitive(result *types.SensitiveResult) {
 		logger.SlogInfoLocal(fmt.Sprintf("%v GetRootDomain error: %v", result.Url, err))
 	}
 	result.RootDomain = rootDomain
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	result.Project = h.GetAssetProject(rootDomain)
 	interfaceSlice = &result
 	if global.NotificationConfig.SensitiveNotification {
-		NotificationMsg := fmt.Sprintf("Sensitive Scan:\n%v - %v\n", &result.Url, &result.SID)
+		NotificationMsg := fmt.Sprintf("Sensitive Scan:\n%v - %v\n", result.Url, result.SID)
 		notification.NotificationQueues["URLSecurity"].Queue <- NotificationMsg
 	}
 	ResultQueues["SensitiveResult"].Queue <- interfaceSlice
 
 }
 
-func (h *handler) SensitiveBody(body *string, md5 string) {
-	collectionName := "SensitiveBody"
+func (h *handler) SensitiveBody(body string, md5 string) {
 	selector := bson.M{"md5": md5}
 
 	update := bson.M{
 		"$set": bson.M{
-			"body": *body,
+			"body": body,
 			"md5":  md5,
 		},
 	}
-	// 调用 Upsert 方法，执行插入或更新操作
-	_, err := mongodb.MongodbClient.Upsert(collectionName, selector, update)
-	if err != nil {
-		logger.SlogError(fmt.Sprintf("SensitiveBody insert mongodb error:%v", err))
+	op := types.BulkUpdateOperation{
+		Selector: selector,
+		Update:   update,
 	}
+	ResultQueues["SensitiveBody"].Queue <- op
 }
 
 func (h *handler) SensitiveUrl(url string, urlId string, bodyId string) {
@@ -261,6 +280,9 @@ func (h *handler) Vulnerability(result *types.VulnResult) {
 		logger.SlogInfoLocal(fmt.Sprintf("%v GetRootDomain error: %v", result.Url, err))
 	}
 	result.RootDomain = rootDomain
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	result.Project = h.GetAssetProject(rootDomain)
 	interfaceSlice = &result
 	if global.NotificationConfig.VulNotification {
@@ -268,16 +290,16 @@ func (h *handler) Vulnerability(result *types.VulnResult) {
 		if global.NotificationConfig.VulLevel != "" {
 			if strings.Contains(strings.ToLower(global.NotificationConfig.VulLevel), strings.ToLower(result.Level)+",") {
 				if result.Url != "" {
-					NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]\n", result.Url)
+					NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]-[%v]\n", result.Url, result.Level, result.VulName, result.Matched)
 				} else {
-					NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]\n", result.Matched)
+					NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]\n", result.Level, result.VulName, result.Matched)
 				}
 			}
 		} else {
 			if result.Url != "" {
-				NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]\n", result.Url)
+				NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]-[%v]\n", result.Url, result.Level, result.VulName, result.Matched)
 			} else {
-				NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]\n", result.Matched)
+				NotificationMsg += fmt.Sprintf("%v-[%v]-[%v]\n", result.Level, result.VulName, result.Matched)
 			}
 		}
 		notification.NotificationQueues["VulnerabilityScan"].Queue <- NotificationMsg
@@ -292,6 +314,9 @@ func (h *handler) PageMonitoringInsert(result *types.PageMonit) {
 		logger.SlogInfoLocal(fmt.Sprintf("%v GetRootDomain error: %v", result.Url, err))
 	}
 	result.RootDomain = rootDomain
+	if result.Time == "" {
+		result.Time = utils.Tools.GetTimeNow()
+	}
 	result.Project = h.GetAssetProject(rootDomain)
 	interfaceSlice = &result
 	ResultQueues["PageMonitoring"].Queue <- interfaceSlice
@@ -301,4 +326,59 @@ func (h *handler) PageMonitoringInsertBody(result *types.PageMonitBody) {
 	var interfaceSlice interface{}
 	interfaceSlice = &result
 	ResultQueues["PageMonitoringBody"].Queue <- interfaceSlice
+}
+
+func (h *handler) RootDomain(result *types.RootDomain) {
+	selector := bson.M{"domain": result.Domain}
+	result.Project = h.GetAssetProject(result.Domain)
+	var resultEx types.RootDomain
+	err := mongodb.MongodbClient.FindOne("RootDomain", bson.M{"domain": result.Domain}, nil, &resultEx)
+	tmpData := bson.M{
+		"icp":      result.ICP,
+		"tags":     result.Tags,
+		"taskName": result.TaskName,
+		"project":  result.Project,
+		"time":     result.Time,
+		"company":  result.Company,
+	}
+	if err != nil {
+		// 出现错误表示 mongodb中不存在， 不存在则不进行处理 直接更新插入
+	} else {
+		// mongodb中存在
+		// 查询mongodb中是否存在该domain 如果存在 则判断icp、company、project是否一样 如果一样就不需要更新，如果不一样需要更新，并且不一样的时候新的icp、company、project需要不为空
+		if result.ICP == resultEx.ICP && result.Company == resultEx.Company && result.Project == resultEx.Project {
+			return
+		}
+		if result.ICP == "" {
+			tmpData["icp"] = resultEx.ICP
+		}
+		if result.Company == "" {
+			tmpData["company"] = resultEx.Company
+		}
+		if result.Project == "" {
+			tmpData["project"] = resultEx.Project
+		}
+	}
+	update := bson.M{
+		"$set": tmpData,
+	}
+	op := types.BulkUpdateOperation{
+		Selector: selector,
+		Update:   update,
+	}
+	ResultQueues["RootDomain"].Queue <- op
+}
+
+func (h *handler) APP(result *types.APP) {
+	var interfaceSlice interface{}
+	result.Project = h.GetAssetProject(result.ICP)
+	interfaceSlice = &result
+	ResultQueues["APP"].Queue <- interfaceSlice
+}
+
+func (h *handler) MP(result *types.MP) {
+	var interfaceSlice interface{}
+	result.Project = h.GetAssetProject(result.ICP)
+	interfaceSlice = &result
+	ResultQueues["MP"].Queue <- interfaceSlice
 }

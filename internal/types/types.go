@@ -356,10 +356,19 @@ type MP struct {
 	Url         string   `bson:"url"`
 	ICP         string   `bson:"icp"`
 	Description string   `bson:"description"`
+	Category    string   `bson:"category"`
 	Company     string   `bson:"company"`
 	FilePath    string   `bson:"-"`
 	Tags        []string `bson:"tags"`
 	TaskName    string   `bson:"taskName"`
 	Project     string   `bson:"project"`
 	Time        string   `bson:"time"`
+}
+
+type Company struct {
+	Name string
+}
+
+type ICP struct {
+	ICP string
 }

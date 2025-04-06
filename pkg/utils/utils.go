@@ -8,9 +8,11 @@
 package utils
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/md5"
 	"encoding/base64"
@@ -330,6 +332,37 @@ func (t *UtilTools) DeleteFile(filePath string) {
 	}
 }
 
+func (t *UtilTools) DeleteFolder(folderPath string) error {
+	// 检查文件夹是否存在
+	if _, err := os.Stat(folderPath); os.IsNotExist(err) {
+		return fmt.Errorf("文件夹不存在: %s", folderPath)
+	}
+
+	// 遍历文件夹中的所有文件和子文件夹并删除
+	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		// 删除文件
+		if !info.IsDir() {
+			return os.Remove(path)
+		}
+		// 删除空文件夹
+		return os.Remove(path)
+	})
+	if err != nil {
+		return fmt.Errorf("删除文件夹失败: %v", err)
+	}
+
+	// 删除根文件夹
+	err = os.Remove(folderPath)
+	if err != nil {
+		return fmt.Errorf("删除文件夹失败: %v", err)
+	}
+
+	return nil
+}
+
 // GetParameter 获取指定模块指定插件的参数
 func (t *UtilTools) GetParameter(Parameters map[string]map[string]string, module string, plugin string) (string, bool) {
 	// 查找 module 是否存在
@@ -564,11 +597,13 @@ func (t *UtilTools) ExecuteCommandToChanWithTimeout(cmdName string, args []strin
 		wg.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
+			txt := scanner.Text()
 			select {
 			case <-ctxWithTimeout.Done():
 				return
 			default:
-				logger.SlogWarnLocal(fmt.Sprintf("Error getting stderr: %s", scanner.Text()))
+				result <- txt
+				logger.SlogWarnLocal(fmt.Sprintf("Error getting stderr: %s", txt))
 			}
 		}
 		if err := scanner.Err(); err != nil {
@@ -1111,6 +1146,66 @@ func (t *UtilTools) UnzipSrcToDest(src string, dest string) error {
 		}
 	}
 	return nil
+}
+func (t *UtilTools) UntarGz(src, dest string) error {
+	file, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	gzReader, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer gzReader.Close()
+
+	tarReader := tar.NewReader(gzReader)
+
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		targetPath := filepath.Join(dest, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(targetPath, os.ModePerm); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(targetPath), os.ModePerm); err != nil {
+				return err
+			}
+
+			outFile, err := os.Create(targetPath)
+			if err != nil {
+				return err
+			}
+
+			if _, err := io.Copy(outFile, tarReader); err != nil {
+				outFile.Close()
+				return err
+			}
+			outFile.Close()
+		}
+	}
+
+	return nil
+}
+
+func (t *UtilTools) UnzipFile(src, dest string) error {
+	if strings.HasSuffix(src, ".zip") {
+		return t.UnzipSrcToDest(src, dest)
+	} else if strings.HasSuffix(src, ".tar.gz") {
+		return t.UntarGz(src, dest)
+	}
+	return fmt.Errorf("unsupported file format: %s", src)
 }
 
 // RemoveStringDuplicates 数组去重

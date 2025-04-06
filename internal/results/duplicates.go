@@ -101,6 +101,7 @@ func (d *duplicate) DuplicateLocalCache(key string) bool {
 // DuplicateRedisCache 在key中查找是否存在value来进行去重，返回true 表示不存在 不重复 返回false 表示已经存在了 重复
 func (d *duplicate) DuplicateRedisCache(key string, value string) bool {
 	ctx := context.Background()
+	return true
 	exists, err := redis.RedisClient.SIsMember(ctx, key, value)
 	if err != nil {
 		logger.SlogError(fmt.Sprintf("PortIntask Deduplication error %v", err))

@@ -27,7 +27,6 @@ func GetName() string {
 }
 
 func Install() error {
-	// 安装 Findomain 到指定目录下面
 	sprayPath := filepath.Join(global.ExtDir, "spray")
 	if err := os.MkdirAll(sprayPath, os.ModePerm); err != nil {
 		logger.SlogError(fmt.Sprintf("Failed to create ksubdomain folder:", err))

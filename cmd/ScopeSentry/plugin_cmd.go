@@ -27,7 +27,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
-	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/URLSecurity/DependencyConfusion"
+	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/AssetMapping/ICPAPPMP"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -131,7 +131,26 @@ func main() {
 	//TestXray(plgPath)
 	//TestAi(plgPath)
 	//TestDep(plgPath)
-	TestDepDebug()
+	//TestDepDebug()
+	TestIcpDebug()
+}
+
+func TestIcpDebug() {
+	op := options.PluginOption{
+		Name:      "ICPAPPMP",
+		Module:    "AssetMapping",
+		Parameter: "",
+		PluginId:  "",
+		Ctx:       contextmanager.GlobalContextManagers.GetContext("111111"),
+		Log: func(msg string, tp ...string) {
+
+		},
+		ResultFunc: func(i interface{}) {
+
+		},
+	}
+	input := types.RootDomain{Domain: "baidu.com"}
+	plugin.Execute(input, op)
 }
 
 func TestDepDebug() {

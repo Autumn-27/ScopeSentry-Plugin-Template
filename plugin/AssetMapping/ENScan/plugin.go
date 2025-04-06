@@ -194,6 +194,7 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	// 使用 WithCancel 创建一个新的上下文
 	newCtx, cancel := context.WithCancel(op.Ctx)
 	defer cancel()
+	defer utils.Tools.DeleteFolder(resultPath)
 	go func() {
 		utils.Tools.ExecuteCommandToChanWithTimeout(enscanExecPath, arg, resultChan, time.Duration(executionTimeout)*time.Minute, newCtx)
 	}()

@@ -60,7 +60,15 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		} else {
 			tmpTarget = companyTarget.Name
 		}
-		return GetIcpAppMp(tmpTarget, map[string]bool{}, op)
+		domainList := make(map[string]bool)
+		// 先使用beianx.cn查询
+		GetRootDomainByBeian(tmpTarget, rootDomainResult.Domain, op, domainList)
+		if len(MIITAPI) != 0 {
+			// 如果有miit接口 则继续使用miit查询更多信息
+			return GetIcpAppMp(tmpTarget, domainList, op)
+		} else {
+			return nil, nil
+		}
 	}
 	parameter := op.Parameter
 	// outputDirName := fmt.Sprintf("bbot_result_%s", targetMD5)
@@ -137,28 +145,11 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v] %v %v %v", GetName(), rootDomainResult.Domain, rootDomainResult.ICP, rootDomainResult.Company))
 	// 将初始结果发送到结果处理
 	op.ResultFunc(rootDomainResult)
-	var allRootDomain []ICPinfo
 	tmpIcp := LastSplitOnce(rootDomainResult.ICP, "-")
 	// 根据icp查询更多的根域名
 	if rootDomainResult.ICP != "" {
 		// 如果icp不为空的话  根据icp 查更多的根域名
-		locakKey := "duplicates:" + op.TaskId + ":icp:" + tmpIcp
-		keyRedis := "duplicates:" + op.TaskId + ":icp"
-		valueRedis := tmpIcp
-		flag := results.Duplicate.Custom(locakKey, keyRedis, valueRedis)
-		if flag {
-			// 该icp没有查询过
-			allRootDomain = GetIcp(tmpIcp)
-			if len(allRootDomain) != 0 {
-				// 根据icp查询根域名
-				for _, r := range allRootDomain {
-					if r.Domain != rootDomainResult.Domain {
-						op.ResultFunc(types.RootDomain{Domain: r.Domain, ICP: r.ICP, Company: r.Company})
-						domainList[r.Domain] = true
-					}
-				}
-			}
-		}
+		GetRootDomainByBeian(tmpIcp, rootDomainResult.Domain, op, domainList)
 	}
 	// 由于app、小程序接口依赖于miit接口 所以如果miit接口是空的就返回，据了解零零信安的接口也可以查询app和小程序 可以通过rootDomainResult的公司名进行查找
 	// 我这没有vip，期待其他师傅补充零零信安的接口
@@ -171,6 +162,28 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	}
 
 	return nil, nil
+}
+
+func GetRootDomainByBeian(tmpIcp string, ingDomain string, op options.PluginOption, domainList map[string]bool) {
+	// 如果icp不为空的话  根据icp 查更多的根域名
+	locakKey := "duplicates:" + op.TaskId + ":icp:" + tmpIcp
+	keyRedis := "duplicates:" + op.TaskId + ":icp"
+	valueRedis := tmpIcp
+	flag := results.Duplicate.Custom(locakKey, keyRedis, valueRedis)
+	if flag {
+		var allRootDomain []ICPinfo
+		// 该icp没有查询过
+		allRootDomain = GetIcp(tmpIcp)
+		if len(allRootDomain) != 0 {
+			// 根据icp查询根域名
+			for _, r := range allRootDomain {
+				if r.Domain != ingDomain {
+					op.ResultFunc(types.RootDomain{Domain: r.Domain, ICP: r.ICP, Company: r.Company})
+					domainList[r.Domain] = true
+				}
+			}
+		}
+	}
 }
 
 func GetIcpAppMp(tmpIcp string, domainList map[string]bool, op options.PluginOption) (interface{}, error) {

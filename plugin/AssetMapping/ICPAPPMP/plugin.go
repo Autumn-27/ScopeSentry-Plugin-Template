@@ -330,8 +330,10 @@ func MiitApi(str string, pageNum int, retryCount int, tp string) (MiitWebRespons
 
 	// 如果code不是200，进行递归调用并减少retryCount
 	if miitWebResponse.Code != 200 {
-		logger.SlogWarnLocal(fmt.Sprintf("[%v] MiitApi %v pageNum %v code %v msg %v, retrying %v", GetName(), str, pageNum, miitWebResponse.Code, miitWebResponse.Msg, retryCount-1))
+		logger.SlogWarnLocal(fmt.Sprintf("[%v] MiitApi %v type %v pageNum %v code %v msg %v, retrying %v", GetName(), str, tp, pageNum, miitWebResponse.Code, miitWebResponse.Msg, retryCount-1))
 		return MiitApi(str, pageNum, retryCount-1, tp)
+	} else {
+		logger.SlogInfoLocal(fmt.Sprintf("[%v] MiitApi %v type %v pageNum %v code %v msg %v, retrying %v", GetName(), str, tp, pageNum, miitWebResponse.Code, miitWebResponse.Msg, retryCount-1))
 	}
 
 	return miitWebResponse, nil

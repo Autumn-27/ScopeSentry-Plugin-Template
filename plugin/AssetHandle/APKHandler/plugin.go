@@ -8,6 +8,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/global"
@@ -15,6 +16,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -446,4 +448,130 @@ func GetApkpureDownloadUrl(id string, getName bool) (string, string, error) {
 func main() {
 	//res, _ := TencentGetId("百度极速版")
 	fmt.Println(GetApkpureDownloadUrl("com.instagram.android", true))
+}
+
+// 解压APK文件
+func unzipAPK(apkPath, outputDir string) error {
+	r, err := zip.OpenReader(apkPath)
+	if err != nil {
+		return fmt.Errorf("failed to open apk file: %v", err)
+	}
+	defer r.Close()
+
+	for _, f := range r.File {
+		fpath := filepath.Join(outputDir, f.Name)
+
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(fpath, os.ModePerm); err != nil {
+				return fmt.Errorf("failed to create directory %s: %v", fpath, err)
+			}
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return fmt.Errorf("failed to create directory for file %s: %v", fpath, err)
+		}
+
+		destFile, err := os.Create(fpath)
+		if err != nil {
+			return fmt.Errorf("failed to create file %s: %v", fpath, err)
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			destFile.Close()
+			return fmt.Errorf("failed to open file %s: %v", f.Name, err)
+		}
+
+		_, err = io.Copy(destFile, rc)
+		rc.Close()
+		destFile.Close()
+		if err != nil {
+			return fmt.Errorf("failed to copy content of %s: %v", f.Name, err)
+		}
+	}
+	return nil
+}
+
+// 使用 d2j-dex2jar 将 .dex 文件转换为 .jar
+func dexToJar(dexFile, outputDir string) (string, error) {
+	// 构建 .bat 路径（相对路径转绝对路径）
+	batRelativePath := filepath.Join("tool", "dex-tools-v2.4", "d2j-dex2jar.bat")
+	batAbsPath, err := filepath.Abs(batRelativePath)
+	if err != nil {
+		return "", fmt.Errorf("无法获取 .bat 的绝对路径: %v", err)
+	}
+
+	// 获取 .bat 所在目录，作为工作目录
+	workDir := filepath.Dir(batAbsPath)
+
+	// 拼接输出的 jar 文件路径
+	jarOutputPath := filepath.Join(outputDir, filepath.Base(dexFile)+".jar")
+
+	// 构建执行命令
+	cmd := exec.Command(batAbsPath, dexFile, "-o", jarOutputPath, "--force")
+	output, err := cmd.CombinedOutput()
+
+	// 输出调试信息
+	fmt.Println("执行 .bat 路径：", batAbsPath)
+	fmt.Println("工作目录：", workDir)
+	fmt.Println("输出 jar 路径：", jarOutputPath)
+
+	if err != nil {
+		return "", fmt.Errorf("d2j-dex2jar 执行失败: %v\n输出内容: %s", err, string(output))
+	}
+
+	fmt.Println("转换成功")
+	return jarOutputPath, nil
+}
+
+// jarToJava 将 .jar 反编译为 .java 文件，输出到 result/java/xxx/
+func jarToJava(jarFile string, javaBaseDir string) error {
+	jarName := strings.TrimSuffix(filepath.Base(jarFile), ".jar")
+	outputDir := filepath.Join(javaBaseDir, jarName)
+
+	if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create output dir %s: %v", outputDir, err)
+	}
+
+	cmd := exec.Command("java", "-jar", "tool/cfr-0.152.jar", jarFile, "--outputdir", outputDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("CFR 反编译失败: %v\n输出内容: %s", err, string(output))
+	}
+	return nil
+}
+
+// apkToolDecompile 使用 apktool 反编译 apk
+func apkToolDecompile(apkPath, outputDir string) error {
+	cmd := exec.Command("java", "-jar", "tool/apktool_2.11.1.jar", "d", apkPath, "-o", outputDir, "-f")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("apktool 反编译失败: %v\n输出内容: %s", err, string(output))
+	}
+	return nil
+}
+
+// processDexFiles 处理 dex 文件
+func processDexFiles(tmpDir, javaOutputDir string) error {
+	files, err := ioutil.ReadDir(tmpDir)
+	if err != nil {
+		return fmt.Errorf("failed to read tmpDir: %v", err)
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".dex") {
+			dexPath := filepath.Join(tmpDir, file.Name())
+			jarPath, err := dexToJar(dexPath, tmpDir)
+			if err != nil {
+				return fmt.Errorf("failed to convert %s to jar: %v", file.Name(), err)
+			}
+
+			err = jarToJava(jarPath, javaOutputDir)
+			if err != nil {
+				return fmt.Errorf("failed to convert jar to java for %s: %v", file.Name(), err)
+			}
+		}
+	}
+	return nil
 }

@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -29,17 +30,26 @@ func GetName() string {
 }
 
 var (
+	// APKHandlerPath 是 APKHandler 的根目录
 	APKHandlerPath = filepath.Join(global.ExtDir, "APKHandler")
-	AppPath        = filepath.Join(APKHandlerPath, "app")
-	TmpPath        = filepath.Join(APKHandlerPath, "tmp")
-	ApktoolPath    = filepath.Join(APKHandlerPath, "apktool")
-	JavaPath       = filepath.Join(APKHandlerPath, "java")
+
+	// AppPath 是 APKHandler/app，用于存放原始 app 文件
+	AppPath = filepath.Join(APKHandlerPath, "app")
+
+	// TmpPath 是 APKHandler/tmp，用于存放 app 解压后的内容（如 dex）
+	TmpPath = filepath.Join(APKHandlerPath, "tmp")
+
+	// ApktoolPath 是 APKHandler/apktool，用于存放 apktool 反编译的结果
+	ApktoolPath = filepath.Join(APKHandlerPath, "apktool")
+
+	// JavaPath 是 APKHandler/java，用于存放 dex 转 jar 后再反编译成的 Java 源码
+	JavaPath = filepath.Join(APKHandlerPath, "java")
 )
 
 func Install() error {
 	createDir := func(path string) error {
 		if err := os.MkdirAll(path, os.ModePerm); err != nil {
-			logger.SlogError(fmt.Sprintf("Failed to create %s folder: %v", path, err))
+			logger.SlogError(fmt.Sprintf("[Plugin %v]Failed to create %s folder: %v", GetName(), path, err))
 			return err
 		}
 		return nil
@@ -60,9 +70,29 @@ func Install() error {
 		return err
 	}
 
-	// APKHandler/app 存放app目录  APKHandler/tmp app解压目录  APKHandler/apktool apktool反编译结果目录 APKHandler/tmp dex转jar目录  APKHandler/java jar反编译为java目录
+	// 检查java环境
+	checkJavaEnvironment()
 
 	return nil
+}
+
+func checkJavaEnvironment() bool {
+	// 执行 java -version 命令
+	cmd := exec.Command("java", "-version")
+	stderr, err := cmd.CombinedOutput()
+
+	// 如果执行失败，返回 false
+	if err != nil {
+		fmt.Println("Error executing java command:", err)
+		return false
+	}
+
+	// 检查输出中是否包含 "java version"
+	if strings.Contains(string(stderr), "java version") {
+		return true
+	}
+
+	return false
 }
 
 func Check() error {

@@ -240,10 +240,11 @@ type Props struct {
 
 var TencentDataRE = regexp.MustCompile(`<script[^>]*id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>`)
 
-func TencentGetId(name string) string {
+func TencentGetId(name string) (string, error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", "https://sj.qq.com/search?q=%E7%99%BE%E5%BA%A6", nil)
 	if err != nil {
+		return "", err
 	}
 	req.Header.Set("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
 	req.Header.Set("accept-language", "zh-CN,zh;q=0.9")
@@ -262,14 +263,16 @@ func TencentGetId(name string) string {
 	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
 	resp, err := client.Do(req)
 	if err != nil {
+		return "", err
 	}
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
+		return "", err
 	}
 	matches := TencentDataRE.FindStringSubmatch(string(bodyText))
 	if len(matches) < 2 {
-		return ""
+		return "", nil
 	}
 	var propsWrapper struct {
 		Props Props `json:"props"`
@@ -278,23 +281,65 @@ func TencentGetId(name string) string {
 	// 将 JSON 字符串解码到结构体
 	err = json.Unmarshal([]byte(matches[1]), &propsWrapper)
 	if err != nil {
-		return ""
+		return "", nil
 	}
 	if propsWrapper.Props.PageProps.DynamicCardResponse.Data.Components != nil {
 		for _, dy := range propsWrapper.Props.PageProps.DynamicCardResponse.Data.Components {
 			if dy.Data.ItemData != nil {
 				for _, it := range dy.Data.ItemData {
 					if it.Name == name {
-						return it.PkgName
+						return it.PkgName, nil
 					}
 				}
 			}
 		}
 	}
-	return ""
+	return "", nil
+}
+
+var apkPureDownloadURLRegex = regexp.MustCompile(`(X?APKJ)..(https?://(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))`)
+
+var apkNameRegex = regexp.MustCompile(`(?s)version_list........([\P{C}]+)`)
+
+func GetApkpureDownloadUrl(id string, getName bool) (string, string, error) {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", fmt.Sprintf("https://api.pureapk.com/m/v3/cms/app_version?hl=en-US&package_name=%v", id), nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36")
+	req.Header.Set("Referer", "")
+	req.Header.Set("x-cv", "3172501")
+	req.Header.Set("x-sv", "29")
+	req.Header.Set("x-abis", "arm64-v8a,armeabi-v7a,armeabi")
+	req.Header.Set("x-gp", "1")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	bodyText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", "", err
+	}
+	// 查找匹配的结果
+	matches := apkPureDownloadURLRegex.FindStringSubmatch(string(bodyText))
+
+	if len(matches) >= 3 {
+		name := ""
+		if getName {
+			nameMatches := apkNameRegex.FindStringSubmatch(string(bodyText))
+			if len(nameMatches) >= 2 {
+				name = nameMatches[1]
+			}
+		}
+		return matches[2], name, nil
+	} else {
+		return "", "", fmt.Errorf("Not Fund download url")
+	}
 }
 
 func main() {
-	res := TencentGetId("百度极速版")
-	fmt.Println(res)
+	//res, _ := TencentGetId("百度极速版")
+	fmt.Println(GetApkpureDownloadUrl("com.instagram.android", true))
 }

@@ -49,7 +49,7 @@ func Install() error {
 	// 安装 enscan 到指定目录下面
 	enscanPath := filepath.Join(global.ExtDir, "enscan")
 	if err := os.MkdirAll(enscanPath, os.ModePerm); err != nil {
-		logger.SlogError(fmt.Sprintf("Failed to create ksubdomain folder:", err))
+		logger.SlogError(fmt.Sprintf("Failed to create enscan folder:", err))
 		return err
 	}
 	osType := runtime.GOOS

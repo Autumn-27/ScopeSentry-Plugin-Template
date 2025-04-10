@@ -10,10 +10,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Autumn-27/ScopeSentry-Scan/internal/global"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
+	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
+	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -23,7 +28,40 @@ func GetName() string {
 	return "APKHandler"
 }
 
+var (
+	APKHandlerPath = filepath.Join(global.ExtDir, "APKHandler")
+	AppPath        = filepath.Join(APKHandlerPath, "app")
+	TmpPath        = filepath.Join(APKHandlerPath, "tmp")
+	ApktoolPath    = filepath.Join(APKHandlerPath, "apktool")
+	JavaPath       = filepath.Join(APKHandlerPath, "java")
+)
+
 func Install() error {
+	createDir := func(path string) error {
+		if err := os.MkdirAll(path, os.ModePerm); err != nil {
+			logger.SlogError(fmt.Sprintf("Failed to create %s folder: %v", path, err))
+			return err
+		}
+		return nil
+	}
+	if err := createDir(APKHandlerPath); err != nil {
+		return err
+	}
+	if err := createDir(AppPath); err != nil {
+		return err
+	}
+	if err := createDir(TmpPath); err != nil {
+		return err
+	}
+	if err := createDir(ApktoolPath); err != nil {
+		return err
+	}
+	if err := createDir(JavaPath); err != nil {
+		return err
+	}
+
+	// APKHandler/app 存放app目录  APKHandler/tmp app解压目录  APKHandler/apktool apktool反编译结果目录 APKHandler/tmp dex转jar目录  APKHandler/java jar反编译为java目录
+
 	return nil
 }
 
@@ -36,11 +74,42 @@ func Uninstall() error {
 }
 
 func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
-	//appResult, ok := input.(*types.APP)
-	//if !ok {
-	//	return nil, nil
-	//}
-
+	appResult, ok := input.(*types.APP)
+	if !ok {
+		return nil, nil
+	}
+	downloadUrl := ""
+	appName := ""
+	var err error
+	if appResult.BundleID != "" {
+		// id不为空 直接获取下载链接 进行下载
+		nameFlag := false
+		if appResult.Name == "" {
+			nameFlag = true
+		}
+		downloadUrl, appName, err = GetApkpureDownloadUrl(appResult.BundleID, nameFlag)
+		if err != nil {
+			return nil, err
+		}
+		if nameFlag {
+			appResult.Name = appName
+		}
+	} else {
+		// 如果id为空 根据app名称获取id 然后根据id获取下载链接
+		if appResult.Name == "" {
+			return nil, nil
+		}
+		id := GetIdByName(appResult.Name)
+		appResult.BundleID = id
+		downloadUrl, _, err = GetApkpureDownloadUrl(id, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// 获取到download url 下载apk
+	if downloadUrl == "" {
+		return nil, nil
+	}
 	return nil, nil
 }
 
@@ -48,9 +117,14 @@ func GetIdByName(name string) string {
 	id := HuaweiGetId(name)
 	if id != "" {
 		//logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v]app %v HuaweiGetId : %v", GetName(), name, id))
-		return name
+		return id
+	} else {
+		getId, err := TencentGetId(name)
+		if err != nil {
+			return ""
+		}
+		return getId
 	}
-	return ""
 }
 
 func HuaweiGetId(name string) string {

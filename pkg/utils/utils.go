@@ -1296,3 +1296,37 @@ func (t *UtilTools) CompressAndEncodeScreenshot(screenshotBytes []byte, scaleFac
 func (t *UtilTools) Command(name string, arg ...string) *exec.Cmd {
 	return exec.Command(name, arg...)
 }
+
+func (t *UtilTools) MoveContents(srcDir, dstDir string) error {
+	return filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// 忽略根目录
+		if path == srcDir {
+			return nil
+		}
+
+		// 计算目标路径
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dstDir, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		} else {
+			// 是文件就移动
+			return t.MoveFile(path, dstPath)
+		}
+	})
+}
+
+func (t *UtilTools) MoveFile(src, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), os.ModePerm); err != nil {
+		return err
+	}
+	return os.Rename(src, dst) // 也可以先 copy 再删原文件，防止跨盘失败
+}

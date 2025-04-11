@@ -5,7 +5,7 @@
 // @time      : 2025/4/9 20:21
 // -------------------------------------------
 
-package main
+package plugin
 
 import (
 	"archive/zip"
@@ -15,6 +15,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/options"
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
+	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -32,23 +34,17 @@ func GetName() string {
 }
 
 var (
-	// APKHandlerPath 是 APKHandler 的根目录
-	APKHandlerPath = filepath.Join(global.ExtDir, "APKHandler")
-
-	// AppPath 是 APKHandler/app，用于存放原始 app 文件
-	AppPath = filepath.Join(APKHandlerPath, "app")
-
-	// TmpPath 是 APKHandler/tmp，用于存放 app 解压后的内容（如 dex）
-	TmpPath = filepath.Join(APKHandlerPath, "tmp")
-
-	// ApktoolPath 是 APKHandler/apktool，用于存放 apktool 反编译的结果
-	ApktoolPath = filepath.Join(APKHandlerPath, "apktool")
-
-	// JavaPath 是 APKHandler/java，用于存放 dex 转 jar 后再反编译成的 Java 源码
-	JavaPath = filepath.Join(APKHandlerPath, "java")
+	APKHandlerPath string
+	AppPath        string
+	TmpPath        string
+	CheckPath      string
 )
 
 func Install() error {
+	APKHandlerPath = filepath.Join(global.ExtDir, "APKHandler")
+	AppPath = filepath.Join(APKHandlerPath, "app")
+	TmpPath = filepath.Join(APKHandlerPath, "tmp")
+	CheckPath = filepath.Join(APKHandlerPath, "checks")
 	createDir := func(path string) error {
 		if err := os.MkdirAll(path, os.ModePerm); err != nil {
 			logger.SlogError(fmt.Sprintf("[Plugin %v]Failed to create %s folder: %v", GetName(), path, err))
@@ -65,16 +61,53 @@ func Install() error {
 	if err := createDir(TmpPath); err != nil {
 		return err
 	}
-	if err := createDir(ApktoolPath); err != nil {
-		return err
-	}
-	if err := createDir(JavaPath); err != nil {
+	if err := createDir(CheckPath); err != nil {
 		return err
 	}
 
 	// 检查java环境
-	checkJavaEnvironment()
+	flag := checkJavaEnvironment()
+	if !flag {
+		logger.SlogError(fmt.Sprintf("[Plugin %v]java not found: %v", GetName()))
+		return nil
+	}
+	// 安装apktool
+	if _, err := os.Stat(filepath.Join(APKHandlerPath, "apktool.jar")); os.IsNotExist(err) {
+		_, err := utils.Tools.HttpGetDownloadFile("https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.11.1.jar", filepath.Join(APKHandlerPath, "apktool.jar"))
+		if err != nil {
+			logger.SlogError(fmt.Sprintf("[Plugin %v]Failed to download apktool: %v", GetName(), err))
+			return err
+		}
+	}
+	if _, err := os.Stat(filepath.Join(APKHandlerPath, "dex-tools")); os.IsNotExist(err) {
+		// 安装dex2jar
+		_, err = utils.Tools.HttpGetDownloadFile("https://github.com/pxb1988/dex2jar/releases/download/v2.4/dex-tools-v2.4.zip", filepath.Join(APKHandlerPath, "dex-tools.zip"))
+		if err != nil {
+			logger.SlogError(fmt.Sprintf("[Plugin %v]Failed to download dex2jar: %v", GetName(), err))
+			return err
+		}
+		err = utils.Tools.UnzipSrcToDest(filepath.Join(APKHandlerPath, "dex-tools.zip"), filepath.Join(APKHandlerPath, "dex-tools"))
+		if err != nil {
+			logger.SlogError(fmt.Sprintf("[Plugin %v]Failed to unzip dex2jar: %v", GetName(), err))
+			return err
+		}
+		defer utils.Tools.DeleteFile(filepath.Join(APKHandlerPath, "dex-tools.zip"))
+		err := utils.Tools.MoveContents(filepath.Join(APKHandlerPath, "dex-tools", "dex-tools-v2.4"), filepath.Join(APKHandlerPath, "dex-tools"))
+		if err != nil {
+			logger.SlogError(fmt.Sprintf("[Plugin %v]Failed to move dex-tools: %v", GetName(), err))
+			return err
+		}
+		os.RemoveAll(filepath.Join(APKHandlerPath, "dex-tools", "dex-tools-v2.4"))
+	}
 
+	// 安装cfr
+	if _, err := os.Stat(filepath.Join(APKHandlerPath, "cfr.jar")); os.IsNotExist(err) {
+		_, err = utils.Tools.HttpGetDownloadFile("https://github.com/leibnitz27/cfr/releases/download/0.152/cfr-0.152.jar", filepath.Join(APKHandlerPath, "cfr.jar"))
+		if err != nil {
+			logger.SlogError(fmt.Sprintf("[Plugin %v]Failed to download dex2jar: %v", GetName(), err))
+			return err
+		}
+	}
 	return nil
 }
 
@@ -138,17 +171,58 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 			return nil, err
 		}
 	}
+	op.Log(fmt.Sprintf("%v %v download url %v", appResult.Name, appResult.BundleID, downloadUrl))
 	// 获取到download url 下载apk
 	if downloadUrl == "" {
 		return nil, nil
 	}
+	appResult.FilePath = filepath.Join(CheckPath, appResult.BundleID)
+	apkPath := filepath.Join(AppPath, appResult.BundleID+".apk")
+	// 下载apk
+	_, err = utils.Tools.HttpGetDownloadFile(downloadUrl, apkPath)
+	if err != nil {
+		op.Log(fmt.Sprintf("Failed to download app %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
+		return err, nil
+	}
+	// 解压apk
+	err = unzipAPK(apkPath, filepath.Join(TmpPath, appResult.BundleID))
+	if err != nil {
+		op.Log(fmt.Sprintf("Failed to unzip app %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
+		return nil, err
+	}
+	apkToolResultPath := filepath.Join(CheckPath, appResult.BundleID, "apktool")
+	err = os.MkdirAll(apkToolResultPath, os.ModePerm)
+	if err != nil {
+		op.Log(fmt.Sprintf("Failed to create apktool folder %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
+		return nil, err
+	}
+	javaResultPath := filepath.Join(CheckPath, appResult.BundleID, "java")
+	err = os.MkdirAll(apkToolResultPath, os.ModePerm)
+	if err != nil {
+		op.Log(fmt.Sprintf("Failed to create java folder %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
+		return nil, err
+	}
+	// apktool反编译apk
+	err = apkToolDecompile(apkPath, apkToolResultPath)
+	if err != nil {
+		op.Log(fmt.Sprintf("Failed to run apktool %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
+		return nil, err
+	}
+	op.Log(fmt.Sprintf("%v %v apktool complete", appResult.Name, appResult.BundleID))
+	// dex 转jar  jar转java
+	err = processDexFiles(filepath.Join(TmpPath, appResult.BundleID), javaResultPath)
+	if err != nil {
+		op.Log(fmt.Sprintf("Failed to run dex to jar to java %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
+		return nil, err
+	}
+	op.Log(fmt.Sprintf("%v %v processDexFiles complete", appResult.Name, appResult.BundleID))
 	return nil, nil
 }
 
 func GetIdByName(name string) string {
 	id := HuaweiGetId(name)
 	if id != "" {
-		//logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v]app %v HuaweiGetId : %v", GetName(), name, id))
+		logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v]app %v HuaweiGetId : %v", GetName(), name, id))
 		return id
 	} else {
 		getId, err := TencentGetId(name)
@@ -165,7 +239,7 @@ func HuaweiGetId(name string) string {
 	for i := 1; i < 5; i++ {
 		interfaceCode, err = HuaweiGetInterfaceCode()
 		if err != nil {
-			//logger.SlogWarnLocal(fmt.Sprintf("[Plugin %v]app %v HuwaGetInterfaceCode error: %v", GetName(), name, err))
+			logger.SlogWarnLocal(fmt.Sprintf("[Plugin %v]app %v HuwaGetInterfaceCode error: %v", GetName(), name, err))
 			time.Sleep(5 * time.Second)
 			continue
 		}
@@ -180,7 +254,7 @@ func HuaweiGetId(name string) string {
 	}
 	id, err := HuaweiSearch(name, interfaceCode)
 	if err != nil {
-		//logger.SlogWarnLocal(fmt.Sprintf("[Plugin %v]app %v HuaweiSearch error: %v", GetName(), name, err))
+		logger.SlogWarnLocal(fmt.Sprintf("[Plugin %v]app %v HuaweiSearch error: %v", GetName(), name, err))
 	}
 	return id
 }
@@ -294,7 +368,6 @@ func HuaweiGetInterfaceCode() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("%s\n", bodyText)
 	res := strings.Trim(string(bodyText), "\"")
 	if strings.HasPrefix(res, "eyJh") {
 		timeValue := ""
@@ -445,11 +518,6 @@ func GetApkpureDownloadUrl(id string, getName bool) (string, string, error) {
 	}
 }
 
-func main() {
-	//res, _ := TencentGetId("百度极速版")
-	fmt.Println(GetApkpureDownloadUrl("com.instagram.android", true))
-}
-
 // 解压APK文件
 func unzipAPK(apkPath, outputDir string) error {
 	r, err := zip.OpenReader(apkPath)
@@ -495,33 +563,26 @@ func unzipAPK(apkPath, outputDir string) error {
 
 // 使用 d2j-dex2jar 将 .dex 文件转换为 .jar
 func dexToJar(dexFile, outputDir string) (string, error) {
-	// 构建 .bat 路径（相对路径转绝对路径）
-	batRelativePath := filepath.Join("tool", "dex-tools-v2.4", "d2j-dex2jar.bat")
-	batAbsPath, err := filepath.Abs(batRelativePath)
-	if err != nil {
-		return "", fmt.Errorf("无法获取 .bat 的绝对路径: %v", err)
+	runPath := ""
+	osType := runtime.GOOS
+	switch osType {
+	case "windows":
+		runPath = filepath.Join(APKHandlerPath, "dex-tools", "d2j-dex2jar.bat")
+	case "linux":
+		runPath = filepath.Join(APKHandlerPath, "dex-tools", "d2j-dex2jar.sh")
 	}
-
-	// 获取 .bat 所在目录，作为工作目录
-	workDir := filepath.Dir(batAbsPath)
 
 	// 拼接输出的 jar 文件路径
 	jarOutputPath := filepath.Join(outputDir, filepath.Base(dexFile)+".jar")
 
 	// 构建执行命令
-	cmd := exec.Command(batAbsPath, dexFile, "-o", jarOutputPath, "--force")
+	cmd := exec.Command(runPath, dexFile, "-o", jarOutputPath, "--force")
 	output, err := cmd.CombinedOutput()
-
-	// 输出调试信息
-	fmt.Println("执行 .bat 路径：", batAbsPath)
-	fmt.Println("工作目录：", workDir)
-	fmt.Println("输出 jar 路径：", jarOutputPath)
 
 	if err != nil {
 		return "", fmt.Errorf("d2j-dex2jar 执行失败: %v\n输出内容: %s", err, string(output))
 	}
 
-	fmt.Println("转换成功")
 	return jarOutputPath, nil
 }
 
@@ -534,7 +595,7 @@ func jarToJava(jarFile string, javaBaseDir string) error {
 		return fmt.Errorf("failed to create output dir %s: %v", outputDir, err)
 	}
 
-	cmd := exec.Command("java", "-jar", "tool/cfr-0.152.jar", jarFile, "--outputdir", outputDir)
+	cmd := exec.Command("java", "-jar", filepath.Join(APKHandlerPath, "cfr.jar"), jarFile, "--outputdir", outputDir)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("CFR 反编译失败: %v\n输出内容: %s", err, string(output))
@@ -544,7 +605,7 @@ func jarToJava(jarFile string, javaBaseDir string) error {
 
 // apkToolDecompile 使用 apktool 反编译 apk
 func apkToolDecompile(apkPath, outputDir string) error {
-	cmd := exec.Command("java", "-jar", "tool/apktool_2.11.1.jar", "d", apkPath, "-o", outputDir, "-f")
+	cmd := exec.Command("java", "-jar", filepath.Join(APKHandlerPath, "apktool.jar"), "d", apkPath, "-o", outputDir, "-f")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("apktool 反编译失败: %v\n输出内容: %s", err, string(output))
@@ -562,12 +623,15 @@ func processDexFiles(tmpDir, javaOutputDir string) error {
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".dex") {
 			dexPath := filepath.Join(tmpDir, file.Name())
+			logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v] dex %v to jar begin", GetName(), dexPath))
 			jarPath, err := dexToJar(dexPath, tmpDir)
+			logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v] dex %v to jar end", GetName(), dexPath))
 			if err != nil {
 				return fmt.Errorf("failed to convert %s to jar: %v", file.Name(), err)
 			}
-
+			logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v] jar %v to java begin", GetName(), dexPath))
 			err = jarToJava(jarPath, javaOutputDir)
+			logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v] jar %v to java end", GetName(), dexPath))
 			if err != nil {
 				return fmt.Errorf("failed to convert jar to java for %s: %v", file.Name(), err)
 			}

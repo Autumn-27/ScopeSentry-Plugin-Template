@@ -27,7 +27,7 @@ import (
 	"github.com/Autumn-27/ScopeSentry-Scan/internal/types"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/logger"
 	"github.com/Autumn-27/ScopeSentry-Scan/pkg/utils"
-	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/AssetMapping/ICPAPPMP"
+	plugin "github.com/Autumn-27/ScopeSentry-Scan/plugin/AssetHandle/APKHandler"
 	"io/ioutil"
 	"log"
 	"path/filepath"
@@ -132,7 +132,27 @@ func main() {
 	//TestAi(plgPath)
 	//TestDep(plgPath)
 	//TestDepDebug()
-	TestIcpDebug()
+	//TestIcpDebug()
+	TestDebugAppHandler()
+}
+
+func TestDebugAppHandler() {
+	op := options.PluginOption{
+		Name:      "APKHandler",
+		Module:    "AssetHandle",
+		Parameter: "",
+		PluginId:  "",
+		Ctx:       contextmanager.GlobalContextManagers.GetContext("111111"),
+		Log: func(msg string, tp ...string) {
+
+		},
+		ResultFunc: func(i interface{}) {
+
+		},
+	}
+	input := types.APP{Name: "dwa", BundleID: "com.instagram.android"}
+	plugin.Install()
+	plugin.Execute(&input, op)
 }
 
 func TestIcpDebug() {

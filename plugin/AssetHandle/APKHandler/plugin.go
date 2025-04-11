@@ -190,6 +190,7 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		op.Log(fmt.Sprintf("Failed to unzip app %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
 		return nil, err
 	}
+	defer utils.Tools.DeleteFile(filepath.Join(TmpPath, appResult.BundleID))
 	apkToolResultPath := filepath.Join(CheckPath, appResult.BundleID, "apktool")
 	err = os.MkdirAll(apkToolResultPath, os.ModePerm)
 	if err != nil {

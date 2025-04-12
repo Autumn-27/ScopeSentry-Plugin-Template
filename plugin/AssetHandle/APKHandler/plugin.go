@@ -137,6 +137,9 @@ func Uninstall() error {
 	return nil
 }
 
+// Thread 并发 同时允许处理1个app
+var Thread = int64(1)
+
 func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	appResult, ok := input.(*types.APP)
 	if !ok {
@@ -216,6 +219,15 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		op.Log(fmt.Sprintf("Failed to download app %v %v: %v", appResult.Name, appResult.BundleID, err), "w")
 		return err, nil
 	}
+
+	// 限制并发
+	sem := utils.GetSemaphore("apkhandler", Thread)
+	err = sem.Acquire(op.Ctx, 1)
+	if err != nil {
+		op.Log(fmt.Sprintf("sem.Acquire get error: %v", err), "w")
+		return nil, err
+	}
+	defer sem.Release(1)
 	// 解压apk
 	err = unzipAPK(apkPath, filepath.Join(TmpPath, appResult.BundleID))
 	if err != nil {

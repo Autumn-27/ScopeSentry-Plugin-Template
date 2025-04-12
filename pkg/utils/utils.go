@@ -594,7 +594,7 @@ func (t *UtilTools) ExecuteCommandToChanWithTimeout(cmdName string, args []strin
 	wg.Add(1)
 	// 使用 goroutine 读取命令的错误输出
 	go func() {
-		wg.Done()
+		defer wg.Done()
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
 			txt := scanner.Text()

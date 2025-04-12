@@ -21,7 +21,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -113,7 +112,7 @@ func Install() error {
 
 func checkJavaEnvironment() bool {
 	// 执行 java -version 命令
-	cmd := exec.Command("java", "-version")
+	cmd := utils.Tools.Command("java", "-version")
 	stderr, err := cmd.CombinedOutput()
 
 	// 如果执行失败，返回 false
@@ -177,6 +176,35 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		return nil, nil
 	}
 	appResult.FilePath = filepath.Join(CheckPath, appResult.BundleID)
+	defer func() {
+		flag := 0
+		err := filepath.Walk(appResult.FilePath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				// 如果遍历过程中有错误，打印错误并继续
+				op.Log(fmt.Sprintf("filepath.Walk Error:%v", err), "w")
+				return err
+			}
+
+			// 判断是否是文件（忽略文件夹）
+			if !info.IsDir() {
+				// 打印文件的路径
+				flag += 1
+				subPath := getSubPathAfter(path, appResult.BundleID)
+				// 读取文件内容
+				body, err := ioutil.ReadFile(path)
+				if err != nil {
+					op.Log(fmt.Sprintf("Error reading file:%v", err), "w")
+					return err
+				}
+				op.ResultFunc(types.UrlResult{Output: fmt.Sprintf("APP:%v:%v", appResult.BundleID, subPath), Body: string(body), IsFile: true})
+			}
+			return nil
+		})
+		op.Log(fmt.Sprintf("%v %v get file number %v", appResult.Name, appResult.BundleID, flag))
+		if err != nil {
+			return
+		}
+	}()
 	apkPath := filepath.Join(AppPath, appResult.BundleID+".apk")
 	// 下载apk
 	_, err = utils.Tools.HttpGetDownloadFile(downloadUrl, apkPath)
@@ -218,6 +246,20 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	}
 	op.Log(fmt.Sprintf("%v %v processDexFiles complete", appResult.Name, appResult.BundleID))
 	return nil, nil
+}
+
+func getSubPathAfter(path string, keyword string) string {
+	// 使用 filepath.Separator 来确保路径分隔符的兼容性（Windows 和 Linux 都兼容）
+	// 在 Windows 系统下，路径是用反斜杠 `\` 来分隔的，因此我们也可以使用 `\` 进行切割
+	// 查找 `keyword` 出现的位置
+	index := strings.Index(path, keyword)
+	if index == -1 {
+		// 如果没有找到 `keyword`，返回空字符串
+		return ""
+	}
+
+	// 获取从 `keyword` 后面的路径
+	return path[index+len(keyword):]
 }
 
 func GetIdByName(name string) string {
@@ -577,7 +619,7 @@ func dexToJar(dexFile, outputDir string) (string, error) {
 	jarOutputPath := filepath.Join(outputDir, filepath.Base(dexFile)+".jar")
 
 	// 构建执行命令
-	cmd := exec.Command(runPath, dexFile, "-o", jarOutputPath, "--force")
+	cmd := utils.Tools.Command(runPath, dexFile, "-o", jarOutputPath, "--force")
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -596,7 +638,7 @@ func jarToJava(jarFile string, javaBaseDir string) error {
 		return fmt.Errorf("failed to create output dir %s: %v", outputDir, err)
 	}
 
-	cmd := exec.Command("java", "-jar", filepath.Join(APKHandlerPath, "cfr.jar"), jarFile, "--outputdir", outputDir)
+	cmd := utils.Tools.Command("java", "-jar", filepath.Join(APKHandlerPath, "cfr.jar"), jarFile, "--outputdir", outputDir)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("CFR 反编译失败: %v\n输出内容: %s", err, string(output))
@@ -606,7 +648,7 @@ func jarToJava(jarFile string, javaBaseDir string) error {
 
 // apkToolDecompile 使用 apktool 反编译 apk
 func apkToolDecompile(apkPath, outputDir string) error {
-	cmd := exec.Command("java", "-jar", filepath.Join(APKHandlerPath, "apktool.jar"), "d", apkPath, "-o", outputDir, "-f")
+	cmd := utils.Tools.Command("java", "-jar", filepath.Join(APKHandlerPath, "apktool.jar"), "d", apkPath, "-o", outputDir, "-f")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("apktool 反编译失败: %v\n输出内容: %s", err, string(output))

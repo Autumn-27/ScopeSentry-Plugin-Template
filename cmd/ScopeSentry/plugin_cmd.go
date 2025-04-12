@@ -150,7 +150,7 @@ func TestDebugAppHandler() {
 
 		},
 	}
-	input := types.APP{Name: "dwa", BundleID: "com.instagram.android"}
+	input := types.APP{Name: "dwa", BundleID: "com.baidu.appsearch"}
 	plugin.Install()
 	plugin.Execute(&input, op)
 }

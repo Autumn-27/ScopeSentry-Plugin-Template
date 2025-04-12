@@ -114,6 +114,8 @@ func Uninstall() error {
 	return nil
 }
 
+var Thread = int64(1)
+
 func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	companyTarget, ok := input.(types.Company)
 	if !ok {
@@ -122,6 +124,14 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	if companyTarget.Name == "" {
 		return nil, nil
 	}
+	// 限制并发
+	sem := utils.GetSemaphore("enscan", Thread)
+	err := sem.Acquire(op.Ctx, 1)
+	if err != nil {
+		op.Log(fmt.Sprintf("sem.Acquire get error: %v", err), "w")
+		return nil, err
+	}
+
 	parameter := op.Parameter
 	var (
 		tp, field, delay, invest string

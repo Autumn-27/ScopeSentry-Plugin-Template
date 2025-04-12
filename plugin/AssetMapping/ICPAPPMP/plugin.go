@@ -46,8 +46,19 @@ func Uninstall() error {
 
 var MIITAPI = []string{}
 
+// Thread 并发 同时允许处理1个app
+var Thread = int64(1)
+
 func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	rootDomainResult, ok := input.(types.RootDomain)
+	// 限制并发
+	sem := utils.GetSemaphore("icpappmp", Thread)
+	err := sem.Acquire(op.Ctx, 1)
+	if err != nil {
+		op.Log(fmt.Sprintf("sem.Acquire get error: %v", err), "w")
+		return nil, err
+	}
+	defer sem.Release(1)
 	if !ok {
 		tmpTarget := ""
 		companyTarget, ok := input.(types.Company)

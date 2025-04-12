@@ -264,7 +264,13 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 			Domain: icp.Domain,
 		}
 		if icp.From != "" {
-			tmpIcp.Company = icp.From
+			tmpParts := strings.Split(icp.From, " ")
+			if len(tmpParts) >= 2 {
+				tmpIcp.Company = tmpParts[0]
+				tmpIcp.Tags = append(tmpIcp.Tags, tmpParts[1])
+			} else {
+				tmpIcp.Company = icp.From
+			}
 		} else {
 			tmpIcp.Company = company
 		}
@@ -274,7 +280,13 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	for _, app := range data.App {
 		tmpAPP := types.APP{Name: app.Name, BundleID: app.BundleID, Url: app.Link, Category: app.Category}
 		if app.From != "" {
-			tmpAPP.Company = app.From
+			tmpParts := strings.Split(app.From, " ")
+			if len(tmpParts) >= 2 {
+				tmpAPP.Company = tmpParts[0]
+				tmpAPP.Tags = append(tmpAPP.Tags, tmpParts[1])
+			} else {
+				tmpAPP.Company = app.From
+			}
 		} else {
 			tmpAPP.Company = company
 		}
@@ -287,7 +299,13 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 			Category: mp.Category,
 		}
 		if mp.From != "" {
-			tmpMP.Company = mp.From
+			tmpParts := strings.Split(mp.From, " ")
+			if len(tmpParts) >= 2 {
+				tmpMP.Company = tmpParts[0]
+				tmpMP.Tags = append(tmpMP.Tags, tmpParts[1])
+			} else {
+				tmpMP.Company = mp.From
+			}
 		} else {
 			tmpMP.Company = company
 		}

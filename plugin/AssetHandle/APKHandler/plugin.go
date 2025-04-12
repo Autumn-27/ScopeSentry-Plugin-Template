@@ -188,6 +188,10 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 			// 判断是否是文件（忽略文件夹）
 			if !info.IsDir() {
 				// 打印文件的路径
+				ext := strings.ToLower(filepath.Ext(path))
+				if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" {
+					return nil // 直接跳过
+				}
 				flag += 1
 				subPath := getSubPathAfter(path, appResult.BundleID)
 				// 读取文件内容

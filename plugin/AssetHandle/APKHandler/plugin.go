@@ -145,6 +145,13 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 	if !ok {
 		return nil, nil
 	}
+	logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v] app %v %v begin", GetName(), appResult.Name, appResult.BundleID))
+	start := time.Now()
+	defer func() {
+		end := time.Now()
+		duration := end.Sub(start)
+		logger.SlogInfoLocal(fmt.Sprintf("[Plugin %v] app %v %v end %v", GetName(), appResult.Name, appResult.BundleID, duration))
+	}()
 	downloadUrl := ""
 	appName := ""
 	var err error

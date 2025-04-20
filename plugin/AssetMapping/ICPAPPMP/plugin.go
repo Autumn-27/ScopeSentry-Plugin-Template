@@ -81,7 +81,6 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 			return nil, nil
 		}
 	}
-	parameter := op.Parameter
 	// outputDirName := fmt.Sprintf("bbot_result_%s", targetMD5)
 	start := time.Now()
 	op.Log(fmt.Sprintf("domain %v begin", rootDomainResult.Domain))
@@ -89,21 +88,6 @@ func Execute(input interface{}, op options.PluginOption) (interface{}, error) {
 		duration := time.Since(start)
 		op.Log(fmt.Sprintf("scan completed: target %v time: %v", rootDomainResult.Domain, duration))
 	}()
-	if parameter != "" {
-		args, err := utils.Tools.ParseArgs(parameter, "et", "finger", "common", "bak", "d")
-		if err != nil {
-			op.Log(fmt.Sprintf("parse args error: %v", err), "e")
-		} else {
-			for key, value := range args {
-				if value != "" {
-					switch key {
-					default:
-						continue
-					}
-				}
-			}
-		}
-	}
 
 	if rootDomainResult.ICP != "" {
 		tmpIcp := LastSplitOnce(rootDomainResult.ICP, "-")
